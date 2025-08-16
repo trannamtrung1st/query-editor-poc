@@ -6,6 +6,9 @@ import { APP_DECORATION_PREFIX, DEFAULT_UUID, QuerySource } from './constants';
 import { uniqueId } from 'lodash';
 import { newAssetTableQuerySource, type IRawQuerySource } from "./models/IRawQuerySource";
 import { QueryProcessor } from './implementations/QueryProcessor';
+import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
+import { QueryResultTable } from './components/QueryResultTable';
+import { Button, notification } from 'antd';
 
 const { TrackedRangeStickiness } = MonacoEditor;
 
@@ -22,6 +25,8 @@ function App() {
   const decorationsRef = useRef<DecorationRef>({});
 
   const [sqlQuery, setSqlQuery] = useState(``)
+  const [queryResults, setQueryResults] = useState<IExecuteDataQueryResponse | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
     const editor = editorRef.current!;
@@ -130,29 +135,61 @@ function App() {
   }
 
   const onExecuteQuery = async () => {
-    const { query, sources } = getFinalQuery();
-    const response = await fetch('http://localhost:5053/dqry/queries/execute', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ query, sources })
-    });
-    const data = await response.json();
-    console.log('Query executed:', data);
+    try {
+      setIsExecuting(true);
+      setQueryResults(null);
+
+      const { query, sources } = getFinalQuery();
+      const response = await fetch('http://localhost:5053/dqry/queries/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query, sources })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('Query executed:', data);
+        const queryResponse = data as IExecuteDataQueryResponse;
+        setQueryResults(queryResponse);
+
+        notification.success({
+          message: 'Query Executed Successfully',
+          description: `Retrieved ${queryResponse.records.length} rows with ${queryResponse.columns.length} columns`,
+          duration: 4,
+        });
+      } else {
+        console.error('Query execution failed:', data);
+        setQueryResults(null);
+
+        notification.error({
+          message: 'Query Execution Failed',
+          description: data.message || 'An error occurred while executing the query',
+          duration: 6,
+        });
+      }
+    } catch (error) {
+      console.error('Query execution error:', error);
+      setQueryResults(null);
+
+      notification.error({
+        message: 'Query Execution Error',
+        description: 'Network error or server unavailable',
+        duration: 6,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
   }
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>SQL Query Editor</h1>
-        <p>Write and edit your SQL queries with syntax highlighting and IntelliSense</p>
-      </header>
-
       <main className="editor-container">
         <div className="editor-wrapper">
           <Editor
-            height="65vh"
+            height="200px"
             defaultLanguage="sql"
             defaultValue={sqlQuery}
             onMount={handleEditorDidMount}
@@ -212,27 +249,24 @@ function App() {
           </div>
 
           <div className='btn-group flex flex-col gap-2'>
-            <button
-              className='bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-md cursor-pointer transition-colors duration-200 mr-2'
-              onClick={onInsertTable}
-            >
+            <Button onClick={onInsertTable} type='primary'>
               ✨ Insert Table
-            </button>
-            <button
-              className='bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-md cursor-pointer transition-colors duration-200 mr-2'
-              onClick={onCopyFinalQuery}
-            >
+            </Button>
+            <Button onClick={onCopyFinalQuery} type='primary'>
               ✨ Copy Final Query
-            </button>
-            <button
-              className='bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-md cursor-pointer transition-colors duration-200 mr-2'
-              onClick={onExecuteQuery}
-            >
-              ✨ Execute Query
-            </button>
+            </Button>
+            <Button onClick={onExecuteQuery} disabled={isExecuting} type='primary'>
+              {isExecuting ? '⏳ Executing...' : '✨ Execute Query'}
+            </Button>
           </div>
         </div>
       </main>
+
+      {/* Query Results Table */}
+      <QueryResultTable
+        data={queryResults}
+        loading={isExecuting}
+      />
     </div>
   )
 }

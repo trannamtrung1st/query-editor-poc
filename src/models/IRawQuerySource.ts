@@ -1,6 +1,5 @@
 import { QuerySource } from "../constants";
 
-
 export interface IRawQuerySource {
     markup: string;
     type: QuerySource;

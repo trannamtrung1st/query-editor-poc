@@ -1,4 +1,8 @@
+// Import component styles
 @use './components.scss';
+
+// Import Ant Design styles
+@use 'antd/dist/reset.css';
 
 // SCSS Variables
 $primary-blue: #1e3c72;
@@ -196,5 +200,74 @@ body {
     .main-layout {
       padding: 1rem;
     }
+  }
+}
+
+// Responsive utilities that work with Tailwind
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .text-shadow-lg {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .backdrop-blur-custom {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+// Custom styling for Ant Design components
+.ant-card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+
+  .ant-card-head {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2) !important;
+
+    .ant-card-head-title {
+      color: #1e3c72 !important;
+    }
+  }
+}
+
+.ant-table {
+  background: white !important;
+
+  .ant-table-thead>tr>th {
+    background: #f8f9fa !important;
+    color: #1e3c72 !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2) !important;
+    font-weight: 600;
+  }
+
+  .ant-table-tbody>tr>td {
+    background: white !important;
+    color: #333 !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .ant-table-tbody>tr:hover>td {
+    background: #f0f8ff !important;
+  }
+
+  .ant-table-tbody>tr:nth-child(even)>td {
+    background: #fafbfc !important;
+  }
+}
+
+.ant-tag {
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+}
+
+.ant-typography {
+  color: #333 !important;
+
+  &.ant-typography-secondary {
+    color: rgba(0, 0, 0, 0.6) !important;
   }
 }
