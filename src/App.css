@@ -35,7 +35,7 @@
   display: flex;
   gap: 2rem;
   padding: 2rem;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 
@@ -49,13 +49,22 @@
 }
 
 .query-info {
-  width: 300px;
+  width: 280px;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: 12px;
   padding: 1.5rem;
   height: fit-content;
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.query-params {
+  width: 320px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
 }
 
 .query-info h3 {
@@ -89,17 +98,22 @@
 }
 
 /* Responsive design */
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .editor-container {
     flex-direction: column;
     padding: 1rem;
+    gap: 1rem;
   }
-  
-  .query-info {
+
+  .query-info,
+  .query-params {
     width: 100%;
+  }
+
+  .query-info {
     order: -1;
   }
-  
+
   .app-header h1 {
     font-size: 2rem;
   }
@@ -109,15 +123,15 @@
   .app-header {
     padding: 1.5rem 1rem;
   }
-  
+
   .editor-container {
     padding: 1rem;
   }
-  
+
   .app-header h1 {
     font-size: 1.8rem;
   }
-  
+
   .app-header p {
     font-size: 1rem;
   }

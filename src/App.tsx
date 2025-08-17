@@ -10,6 +10,8 @@ import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryRespon
 import QueryResultTable from './components/QueryResultTable';
 import AssetAttributeModal from './components/AssetAttributeModal';
 import AssetTableModal from './components/AssetTableModal';
+import DataQueryArgumentPanel from './components/DataQueryArgumentPanel';
+import type { IDataQueryArgument } from './models/IDataQueryArgument';
 import { Button, notification } from 'antd';
 
 const { TrackedRangeStickiness, InjectedTextCursorStops } = MonacoEditor;
@@ -33,6 +35,7 @@ function App() {
   const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
   const [isTableModalVisible, setIsTableModalVisible] = useState(false);
   const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySource | null>(null);
+  const [queryArguments, setQueryArguments] = useState<IDataQueryArgument[]>([]);
 
   const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
     const editor = editorRef.current!;
@@ -137,6 +140,8 @@ function App() {
       decorationsRef.current[decorationId] = { range, content: SQL_TABLE_NAME };
     }
 
+    editor.setPosition({ lineNumber: selection.startLineNumber, column: selection.startColumn + SQL_TABLE_NAME.length });
+    editor.focus();
     console.log('Table name inserted and highlighted:', tableName, decorations);
 
     // Store decoration reference for potential removal later
@@ -198,6 +203,8 @@ function App() {
       decorationsRef.current[decorationId] = { range, content: SQL_ASSET_NAME };
     }
 
+    editor.setPosition({ lineNumber: selection.startLineNumber, column: selection.startColumn + SQL_ASSET_NAME.length });
+    editor.focus();
     console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, decorations);
 
     // Store decoration reference for potential removal later
@@ -241,12 +248,15 @@ function App() {
       setQueryResults(null);
 
       const { query, sources } = getFinalQuery();
+      const _arguments = convertArgumentsToDict(queryArguments);
+      const requestBody: any = { query, sources, arguments: _arguments };
+
       const response = await fetch('http://localhost:5053/dqry/queries/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ query, sources })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
@@ -346,10 +356,53 @@ function App() {
     setSelectedQuerySource(null);
   };
 
+  const convertArgumentsToDict = (arguments_: IDataQueryArgument[]): Record<string, any> => {
+    const argumentsObj: Record<string, IDataQueryArgument> = {};
+
+    arguments_
+      .filter(arg => arg.param.name.trim() && arg.value !== null && arg.value !== undefined && arg.value !== '')
+      .forEach(arg => {
+        argumentsObj[arg.param.name.trim()] = arg;
+      });
+
+    return argumentsObj;
+  };
+
   return (
     <div className="app">
       {contextHolder}
       <main className="editor-container">
+        <div className="query-info">
+          <h3>Query Information</h3>
+          <div className="info-item">
+            <strong>Lines:</strong> {sqlQuery.split('\n').length}
+          </div>
+          <div className="info-item">
+            <strong>Characters:</strong> {sqlQuery.length}
+          </div>
+          <div className="info-item">
+            <strong>Words:</strong> {sqlQuery.split(/\s+/).filter(word => word.length > 0).length}
+          </div>
+
+          <div className='btn-group flex flex-col gap-2'>
+            <Button onClick={onInsertTable('table_1', DEFAULT_UUID)} type='primary'>
+              ✨ Insert Table
+            </Button>
+            <Button onClick={onInsertAssetTimeseries} type='primary'>
+              ✨ Insert Asset Timeseries
+            </Button>
+            <Button onClick={onInsertTable('table_2', 'e2d4d7fe-9722-44df-b8a2-500acc8c7101')} type='primary'>
+              ✨ Insert Invalid Table
+            </Button>
+            <Button onClick={onCopyFinalQuery} type='primary'>
+              ✨ Copy Final Query
+            </Button>
+            <Button onClick={onExecuteQuery} disabled={isExecuting} type='primary'>
+              {isExecuting ? '⏳ Executing...' : '✨ Execute Query'}
+            </Button>
+          </div>
+        </div>
+
         <div className="editor-wrapper">
           <Editor
             height="100%"
@@ -399,35 +452,11 @@ function App() {
           />
         </div>
 
-        <div className="query-info">
-          <h3>Query Information</h3>
-          <div className="info-item">
-            <strong>Lines:</strong> {sqlQuery.split('\n').length}
-          </div>
-          <div className="info-item">
-            <strong>Characters:</strong> {sqlQuery.length}
-          </div>
-          <div className="info-item">
-            <strong>Words:</strong> {sqlQuery.split(/\s+/).filter(word => word.length > 0).length}
-          </div>
-
-          <div className='btn-group flex flex-col gap-2'>
-            <Button onClick={onInsertTable('table_1', DEFAULT_UUID)} type='primary'>
-              ✨ Insert Table
-            </Button>
-            <Button onClick={onInsertAssetTimeseries} type='primary'>
-              ✨ Insert Asset Timeseries
-            </Button>
-            <Button onClick={onInsertTable('table_2', 'e2d4d7fe-9722-44df-b8a2-500acc8c7101')} type='primary'>
-              ✨ Insert Invalid Table
-            </Button>
-            <Button onClick={onCopyFinalQuery} type='primary'>
-              ✨ Copy Final Query
-            </Button>
-            <Button onClick={onExecuteQuery} disabled={isExecuting} type='primary'>
-              {isExecuting ? '⏳ Executing...' : '✨ Execute Query'}
-            </Button>
-          </div>
+        <div className="query-params">
+          <DataQueryArgumentPanel
+            _arguments={queryArguments}
+            setArguments={setQueryArguments}
+          />
         </div>
       </main>
 

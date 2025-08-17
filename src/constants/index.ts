@@ -4,6 +4,14 @@ export const APP_DECORATION_PREFIX = "__app__";
 
 export const DEFAULT_ATTRIBUTE_NAMES = ['id', 'name', 'temperature', 'humidity', 'pressure'];
 
+export enum GenericDataTypes {
+    Text = "text",
+    Boolean = "boolean",
+    DateTime = "datetime",
+    Double = "double",
+    Int = "int"
+}
+
 export enum QuerySource {
     ASSET_TABLE = "asset_table",
     TIMESERIES = "timeseries",
