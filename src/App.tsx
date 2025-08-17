@@ -8,6 +8,7 @@ import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySourc
 import { QueryProcessor } from './implementations/QueryProcessor';
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
 import QueryResultTable from './components/QueryResultTable';
+import AssetAttributeModal from './components/AssetAttributeModal';
 import { Button, notification } from 'antd';
 
 const { TrackedRangeStickiness, InjectedTextCursorStops } = MonacoEditor;
@@ -28,6 +29,8 @@ function App() {
   const [sqlQuery, setSqlQuery] = useState(``)
   const [queryResults, setQueryResults] = useState<IExecuteDataQueryResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
+  const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySource | null>(null);
 
   const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
     const editor = editorRef.current!;
@@ -53,17 +56,32 @@ function App() {
       setSqlQuery(value)
   }
 
-  const handleEditorDidMount = (editor: MonacoEditor.IStandaloneCodeEditor, _: Monaco) => {
-    editorRef.current = editor;
+  const handleAssetColumnCountClick = (querySource: IRawQuerySource) => {
+    console.log('Clicked on a clickable decoration:', querySource);
+    setSelectedQuerySource(querySource);
+    setIsAssetModalVisible(true);
   }
 
-  const onInsertTable = () => {
+  const handleEditorDidMount = (editor: MonacoEditor.IStandaloneCodeEditor, _: Monaco) => {
+    editorRef.current = editor;
+    editor.onMouseDown((e) => {
+      if (!('detail' in e.target) || typeof e.target.detail !== 'object' || !('injectedText' in e.target.detail))
+        return;
+
+      const injectedText = e.target.detail.injectedText as any;
+      const attachedData = injectedText?.options?.attachedData as IRawQuerySource;
+      if (!attachedData || attachedData.type !== QuerySource.TIMESERIES) return;
+
+      handleAssetColumnCountClick(attachedData);
+    });
+  }
+
+  const onInsertTable = (tableName: string, tableId: string) => () => {
     const editor = editorRef.current!;
     const selection = editor.getSelection();
     if (!selection) return;
 
-    const TABLE_NAME = `table_1`;
-    const SQL_TABLE_NAME = `"${TABLE_NAME}"`;
+    const SQL_TABLE_NAME = `"${tableName}"`;
     const COLUMN_COUNT = 3;
     const ASSET_NAME = `asset_1`;
     // Execute the edit to insert the table name
@@ -80,7 +98,7 @@ function App() {
       selection.startColumn + SQL_TABLE_NAME.length
     );
 
-    const querySource = newAssetTableQuerySource(uniqueId('markup_'), DEFAULT_UUID);
+    const querySource = newAssetTableQuerySource(uniqueId('markup_'), tableId);
     const decorations = editor.createDecorationsCollection([
       {
         range: insertedRange,
@@ -88,16 +106,16 @@ function App() {
           inlineClassName: `${APP_DECORATION_PREFIX}asset-table-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
-            value: `Asset: ${ASSET_NAME}\n\nTable: ${TABLE_NAME}`
+            value: `**Asset:** ${ASSET_NAME}\n\n**Table:** ${tableName}`
           },
           before: {
             content: 'TBL',
             cursorStops: InjectedTextCursorStops.Both,
-            attachedData: querySource,
             inlineClassName: `${APP_DECORATION_PREFIX}asset-table-before`,
             inlineClassNameAffectsLetterSpacing: true
           },
           after: {
+            attachedData: querySource,
             content: `${COLUMN_COUNT}☷`,
             cursorStops: InjectedTextCursorStops.Both,
             inlineClassName: `${APP_DECORATION_PREFIX}asset-table-after`,
@@ -113,7 +131,7 @@ function App() {
       decorationsRef.current[decorationId] = { range, content: SQL_TABLE_NAME };
     }
 
-    console.log('Table name inserted and highlighted:', TABLE_NAME, decorations);
+    console.log('Table name inserted and highlighted:', tableName, decorations);
 
     // Store decoration reference for potential removal later
     return decorations;
@@ -149,16 +167,16 @@ function App() {
           inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
-            value: `Asset: ${ASSET_NAME}\n${DEFAULT_ATTRIBUTE_NAMES.map(name => `- ${name}`).join('\n')}`
+            value: `**Asset:** ${ASSET_NAME}\n${DEFAULT_ATTRIBUTE_NAMES.map(name => `- ${name}`).join('\n')}`
           },
           before: {
             content: 'AST',
             cursorStops: InjectedTextCursorStops.Both,
-            attachedData: querySource,
             inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-before`,
             inlineClassNameAffectsLetterSpacing: true
           },
           after: {
+            attachedData: querySource,
             content: `${COLUMN_COUNT}☷`,
             cursorStops: InjectedTextCursorStops.Both,
             inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-after`,
@@ -188,7 +206,7 @@ function App() {
     for (const [decorationId] of Object.entries(decorationsRef.current)) {
       const decorationOpts = model.getDecorationOptions(decorationId)!;
       const decorationRange = model.getDecorationRange(decorationId)!;
-      const querySource = decorationOpts?.before?.attachedData as IRawQuerySource;
+      const querySource = decorationOpts?.after?.attachedData as IRawQuerySource;
       if (!querySource) continue;
 
       sources.push(querySource);
@@ -261,6 +279,62 @@ function App() {
     }
   }
 
+  const handleAssetModalCancel = () => {
+    setIsAssetModalVisible(false);
+    setSelectedQuerySource(null);
+  };
+
+  const handleAssetModalSave = (updatedQuerySource: IRawQuerySource) => {
+    // Update the decoration with the new query source
+    if (editorRef.current && selectedQuerySource) {
+      const model = editorRef.current.getModel();
+      if (model) {
+        // Find and update the decoration
+        const decorations = model.getAllDecorations();
+        const targetDecoration = decorations.find(d => {
+          const attachedData = d.options?.after?.attachedData as IRawQuerySource;
+          return attachedData?.markup === selectedQuerySource.markup;
+        });
+
+        if (targetDecoration) {
+          // Create new decoration options with updated attached data
+          const afterOptions = targetDecoration.options?.after;
+          if (afterOptions) {
+            const newDecorationOptions = {
+              ...targetDecoration.options,
+              after: {
+                ...afterOptions,
+                content: `${updatedQuerySource.sourceConfig?.attributeNames?.length}☷`,
+                attachedData: updatedQuerySource
+              }
+            };
+
+            // Remove old decoration and create new one
+            editorRef.current.removeDecorations([targetDecoration.id]);
+            delete decorationsRef.current[targetDecoration.id];
+
+            const newDecorations = editorRef.current.createDecorationsCollection([{
+              range: targetDecoration.range,
+              options: newDecorationOptions
+            }]);
+
+            // Update the decorationsRef
+            const newDecorationId = (newDecorations as any)._decorationIds[0];
+            if (newDecorationId) {
+              decorationsRef.current[newDecorationId] = {
+                range: targetDecoration.range,
+                content: model.getValueInRange(targetDecoration.range)
+              };
+            }
+          }
+        }
+      }
+    }
+
+    setIsAssetModalVisible(false);
+    setSelectedQuerySource(null);
+  };
+
   return (
     <div className="app">
       {contextHolder}
@@ -327,11 +401,14 @@ function App() {
           </div>
 
           <div className='btn-group flex flex-col gap-2'>
-            <Button onClick={onInsertTable} type='primary'>
+            <Button onClick={onInsertTable('table_1', DEFAULT_UUID)} type='primary'>
               ✨ Insert Table
             </Button>
             <Button onClick={onInsertAssetTimeseries} type='primary'>
               ✨ Insert Asset Timeseries
+            </Button>
+            <Button onClick={onInsertTable('table_2', 'e2d4d7fe-9722-44df-b8a2-500acc8c7101')} type='primary'>
+              ✨ Insert Invalid Table
             </Button>
             <Button onClick={onCopyFinalQuery} type='primary'>
               ✨ Copy Final Query
@@ -347,6 +424,14 @@ function App() {
       <QueryResultTable
         data={queryResults}
         loading={isExecuting}
+      />
+
+      {/* Asset Attribute Modal */}
+      <AssetAttributeModal
+        visible={isAssetModalVisible}
+        onCancel={handleAssetModalCancel}
+        onSave={handleAssetModalSave}
+        querySource={selectedQuerySource}
       />
     </div>
   )
