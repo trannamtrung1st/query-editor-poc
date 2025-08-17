@@ -101,12 +101,8 @@ const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
         <Form.Item
           name="assetName"
           label="Asset Name"
-          rules={[
-            { required: true, message: 'Please enter asset name' },
-            { min: 1, message: 'Asset name must be at least 1 character' }
-          ]}
         >
-          <Input placeholder="Enter asset name" />
+          <Input readOnly placeholder="Enter asset name" />
         </Form.Item>
 
         <Form.Item

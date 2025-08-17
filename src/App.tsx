@@ -9,6 +9,7 @@ import { QueryProcessor } from './implementations/QueryProcessor';
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
 import QueryResultTable from './components/QueryResultTable';
 import AssetAttributeModal from './components/AssetAttributeModal';
+import AssetTableModal from './components/AssetTableModal';
 import { Button, notification } from 'antd';
 
 const { TrackedRangeStickiness, InjectedTextCursorStops } = MonacoEditor;
@@ -30,6 +31,7 @@ function App() {
   const [queryResults, setQueryResults] = useState<IExecuteDataQueryResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
+  const [isTableModalVisible, setIsTableModalVisible] = useState(false);
   const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySource | null>(null);
 
   const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
@@ -59,7 +61,12 @@ function App() {
   const handleAssetColumnCountClick = (querySource: IRawQuerySource) => {
     console.log('Clicked on a clickable decoration:', querySource);
     setSelectedQuerySource(querySource);
-    setIsAssetModalVisible(true);
+
+    if (querySource.type === QuerySource.ASSET_TABLE) {
+      setIsTableModalVisible(true);
+    } else if (querySource.type === QuerySource.TIMESERIES) {
+      setIsAssetModalVisible(true);
+    }
   }
 
   const handleEditorDidMount = (editor: MonacoEditor.IStandaloneCodeEditor, _: Monaco) => {
@@ -70,7 +77,7 @@ function App() {
 
       const injectedText = e.target.detail.injectedText as any;
       const attachedData = injectedText?.options?.attachedData as IRawQuerySource;
-      if (!attachedData || attachedData.type !== QuerySource.TIMESERIES) return;
+      if (!attachedData || (attachedData.type !== QuerySource.TIMESERIES && attachedData.type !== QuerySource.ASSET_TABLE)) return;
 
       handleAssetColumnCountClick(attachedData);
     });
@@ -83,7 +90,6 @@ function App() {
 
     const SQL_TABLE_NAME = `"${tableName}"`;
     const COLUMN_COUNT = 3;
-    const ASSET_NAME = `asset_1`;
     // Execute the edit to insert the table name
     editor.executeEdits('insert-table', [{
       range: selection,
@@ -106,7 +112,7 @@ function App() {
           inlineClassName: `${APP_DECORATION_PREFIX}asset-table-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
-            value: `**Asset:** ${ASSET_NAME}\n\n**Table:** ${tableName}`
+            value: `**Table:** ${tableName}\n\n**Columns:**\n- id (int)\n- name (text)\n- description (text)`
           },
           before: {
             content: 'TBL',
@@ -335,6 +341,11 @@ function App() {
     setSelectedQuerySource(null);
   };
 
+  const handleTableModalCancel = () => {
+    setIsTableModalVisible(false);
+    setSelectedQuerySource(null);
+  };
+
   return (
     <div className="app">
       {contextHolder}
@@ -431,6 +442,13 @@ function App() {
         visible={isAssetModalVisible}
         onCancel={handleAssetModalCancel}
         onSave={handleAssetModalSave}
+        querySource={selectedQuerySource}
+      />
+
+      {/* Asset Table Modal */}
+      <AssetTableModal
+        visible={isTableModalVisible}
+        onCancel={handleTableModalCancel}
         querySource={selectedQuerySource}
       />
     </div>
