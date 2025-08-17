@@ -19,3 +19,16 @@ export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQ
         }
     }
 }
+
+export const newTimeseriesQuerySource = (markup: string, assetId: string, attributeNames: string[]): IRawQuerySource => {
+    return {
+        markup,
+        type: QuerySource.TIMESERIES,
+        sourceId: assetId,
+        sourceIdUuid: assetId,
+        sourceConfig: {
+            assetId,
+            attributeNames
+        }
+    }
+}

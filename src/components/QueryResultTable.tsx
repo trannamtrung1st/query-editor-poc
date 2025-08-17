@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Table, Card, Tag, Space, Typography, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { IExecuteDataQueryResponse, ITableRecord } from '../models/IExecuteDataQueryResponse';
@@ -10,7 +10,7 @@ interface QueryResultTableProps {
     loading?: boolean;
 }
 
-export const QueryResultTable: React.FC<QueryResultTableProps> = ({ data, loading = false }) => {
+const QueryResultTable: React.FC<QueryResultTableProps> = ({ data, loading = false }) => {
     if (!data) {
         return null;
     }
@@ -128,3 +128,8 @@ export const QueryResultTable: React.FC<QueryResultTableProps> = ({ data, loadin
         </Card>
     );
 };
+
+export default memo(QueryResultTable, (prevProps, nextProps) => {
+    return prevProps.data === nextProps.data
+        && prevProps.loading === nextProps.loading;
+});

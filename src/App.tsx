@@ -2,15 +2,15 @@ import { useRef, useState } from 'react'
 import Editor, { useMonaco, type Monaco } from '@monaco-editor/react'
 import { editor as MonacoEditor, Range } from 'monaco-editor';
 import './App.css'
-import { APP_DECORATION_PREFIX, DEFAULT_UUID, QuerySource } from './constants';
+import { APP_DECORATION_PREFIX, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource } from './constants';
 import { uniqueId } from 'lodash';
-import { newAssetTableQuerySource, type IRawQuerySource } from "./models/IRawQuerySource";
+import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySource } from "./models/IRawQuerySource";
 import { QueryProcessor } from './implementations/QueryProcessor';
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
-import { QueryResultTable } from './components/QueryResultTable';
+import QueryResultTable from './components/QueryResultTable';
 import { Button, notification } from 'antd';
 
-const { TrackedRangeStickiness } = MonacoEditor;
+const { TrackedRangeStickiness, InjectedTextCursorStops } = MonacoEditor;
 
 type DecorationRef = {
   [key: string]: {
@@ -23,6 +23,7 @@ function App() {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor>(null);
   const monaco = useMonaco()!;
   const decorationsRef = useRef<DecorationRef>({});
+  const [noti, contextHolder] = notification.useNotification();
 
   const [sqlQuery, setSqlQuery] = useState(``)
   const [queryResults, setQueryResults] = useState<IExecuteDataQueryResponse | null>(null);
@@ -41,8 +42,11 @@ function App() {
           const content = editor.getModel()?.getValueInRange(d.range);
           return content !== cachedDecoration?.content;
         }).map(d => d.id);
-      editor.removeDecorations(affectedIds);
-      affectedIds.forEach(id => delete decorationsRef.current[id]);
+
+      if (affectedIds.length) {
+        editor.removeDecorations(affectedIds);
+        affectedIds.forEach(id => delete decorationsRef.current[id]);
+      }
     });
 
     if (value !== undefined)
@@ -60,6 +64,7 @@ function App() {
 
     const TABLE_NAME = `table_1`;
     const SQL_TABLE_NAME = `"${TABLE_NAME}"`;
+    const COLUMN_COUNT = 3;
     const ASSET_NAME = `asset_1`;
     // Execute the edit to insert the table name
     editor.executeEdits('insert-table', [{
@@ -85,9 +90,18 @@ function App() {
           hoverMessage: {
             value: `Asset: ${ASSET_NAME}\n\nTable: ${TABLE_NAME}`
           },
+          before: {
+            content: 'TBL',
+            cursorStops: InjectedTextCursorStops.Both,
+            attachedData: querySource,
+            inlineClassName: `${APP_DECORATION_PREFIX}asset-table-before`,
+            inlineClassNameAffectsLetterSpacing: true
+          },
           after: {
-            content: '',
-            attachedData: querySource
+            content: `${COLUMN_COUNT}☷`,
+            cursorStops: InjectedTextCursorStops.Both,
+            inlineClassName: `${APP_DECORATION_PREFIX}asset-table-after`,
+            inlineClassNameAffectsLetterSpacing: true
           }
         }
       }
@@ -105,6 +119,67 @@ function App() {
     return decorations;
   }
 
+  const onInsertAssetTimeseries = () => {
+    const editor = editorRef.current!;
+    const selection = editor.getSelection();
+    if (!selection) return;
+
+    const COLUMN_COUNT = 5;
+    const ASSET_NAME = `asset_1`;
+    const SQL_ASSET_NAME = `'${ASSET_NAME}'`;
+    // Execute the edit to insert the table name
+    editor.executeEdits('insert-asset', [{
+      range: selection,
+      text: SQL_ASSET_NAME
+    }]);
+
+    // After inserting, create decoration to highlight the inserted text
+    const insertedRange = new monaco.Range(
+      selection.startLineNumber,
+      selection.startColumn,
+      selection.startLineNumber,
+      selection.startColumn + SQL_ASSET_NAME.length
+    );
+
+    const querySource = newTimeseriesQuerySource(uniqueId('markup_'), DEFAULT_UUID, DEFAULT_ATTRIBUTE_NAMES);
+    const decorations = editor.createDecorationsCollection([
+      {
+        range: insertedRange,
+        options: {
+          inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-tag`,
+          stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          hoverMessage: {
+            value: `Asset: ${ASSET_NAME}\n${DEFAULT_ATTRIBUTE_NAMES.map(name => `- ${name}`).join('\n')}`
+          },
+          before: {
+            content: 'AST',
+            cursorStops: InjectedTextCursorStops.Both,
+            attachedData: querySource,
+            inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-before`,
+            inlineClassNameAffectsLetterSpacing: true
+          },
+          after: {
+            content: `${COLUMN_COUNT}☷`,
+            cursorStops: InjectedTextCursorStops.Both,
+            inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-after`,
+            inlineClassNameAffectsLetterSpacing: true
+          }
+        }
+      }
+    ]);
+
+    const range = decorations.getRange(0);
+    if (range) {
+      const decorationId = (decorations as any)._decorationIds[0];
+      decorationsRef.current[decorationId] = { range, content: SQL_ASSET_NAME };
+    }
+
+    console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, decorations);
+
+    // Store decoration reference for potential removal later
+    return decorations;
+  }
+
   const getFinalQuery = () => {
     const model = editorRef.current!.getModel()!;
     const queryProcessor = new QueryProcessor(sqlQuery);
@@ -113,15 +188,17 @@ function App() {
     for (const [decorationId] of Object.entries(decorationsRef.current)) {
       const decorationOpts = model.getDecorationOptions(decorationId)!;
       const decorationRange = model.getDecorationRange(decorationId)!;
-      const querySource = decorationOpts?.after?.attachedData as IRawQuerySource;
+      const querySource = decorationOpts?.before?.attachedData as IRawQuerySource;
       if (!querySource) continue;
 
       sources.push(querySource);
       switch (querySource.type) {
-        case QuerySource.ASSET_TABLE: {
+        case QuerySource.ASSET_TABLE:
           queryProcessor.replace(decorationRange, `"{{${querySource.markup}}}"`);
           break;
-        }
+        case QuerySource.TIMESERIES:
+          queryProcessor.replace(decorationRange, `'{{${querySource.markup}}}'`);
+          break;
       }
     }
 
@@ -155,7 +232,7 @@ function App() {
         const queryResponse = data as IExecuteDataQueryResponse;
         setQueryResults(queryResponse);
 
-        notification.success({
+        noti.success({
           message: 'Query Executed Successfully',
           description: `Retrieved ${queryResponse.records.length} rows with ${queryResponse.columns.length} columns`,
           duration: 4,
@@ -164,7 +241,7 @@ function App() {
         console.error('Query execution failed:', data);
         setQueryResults(null);
 
-        notification.error({
+        noti.error({
           message: 'Query Execution Failed',
           description: data.message || 'An error occurred while executing the query',
           duration: 6,
@@ -174,7 +251,7 @@ function App() {
       console.error('Query execution error:', error);
       setQueryResults(null);
 
-      notification.error({
+      noti.error({
         message: 'Query Execution Error',
         description: 'Network error or server unavailable',
         duration: 6,
@@ -186,10 +263,11 @@ function App() {
 
   return (
     <div className="app">
+      {contextHolder}
       <main className="editor-container">
         <div className="editor-wrapper">
           <Editor
-            height="200px"
+            height="100%"
             defaultLanguage="sql"
             defaultValue={sqlQuery}
             onMount={handleEditorDidMount}
@@ -251,6 +329,9 @@ function App() {
           <div className='btn-group flex flex-col gap-2'>
             <Button onClick={onInsertTable} type='primary'>
               ✨ Insert Table
+            </Button>
+            <Button onClick={onInsertAssetTimeseries} type='primary'>
+              ✨ Insert Asset Timeseries
             </Button>
             <Button onClick={onCopyFinalQuery} type='primary'>
               ✨ Copy Final Query
