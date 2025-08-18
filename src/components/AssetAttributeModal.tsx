@@ -1,22 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Button, message } from 'antd';
+import React, { useEffect } from 'react';
+import { Modal, Form, Input, Table } from 'antd';
 import type { IRawQuerySource } from '../models/IRawQuerySource';
 
 interface AssetAttributeModalProps {
   visible: boolean;
   onCancel: () => void;
-  onSave: (querySource: IRawQuerySource) => void;
   querySource: IRawQuerySource | null;
 }
 
 const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
   visible,
   onCancel,
-  onSave,
   querySource
 }) => {
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
 
   // Available attribute names for selection
   const availableAttributeNames = [
@@ -24,79 +21,35 @@ const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
     'voltage', 'current', 'power', 'frequency', 'status',
     'timestamp', 'quality', 'unit', 'description', 'location'
   ];
+  const selectedAttributeName = querySource?.sourceConfig?.attributeName;
 
   useEffect(() => {
     if (visible && querySource) {
       // Initialize form with current values
       form.setFieldsValue({
         assetName: querySource.sourceId,
-        attributeNames: querySource.sourceConfig?.attributeNames || []
+        attributeName: selectedAttributeName
       });
     }
   }, [visible, querySource, form]);
 
-  const handleSave = async () => {
-    try {
-      setLoading(true);
-      const values = await form.validateFields();
-
-      if (!querySource) return;
-
-      // Create updated query source
-      const updatedQuerySource: IRawQuerySource = {
-        ...querySource,
-        sourceId: values.assetName,
-        sourceIdUuid: values.assetName,
-        sourceConfig: {
-          ...querySource.sourceConfig,
-          assetId: values.assetName,
-          attributeNames: values.attributeNames
-        }
-      };
-
-      onSave(updatedQuerySource);
-      message.success('Asset attributes updated successfully');
-      form.resetFields();
-    } catch (error) {
-      console.error('Form validation error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCancel = () => {
-    form.resetFields();
     onCancel();
   };
 
   return (
     <Modal
-      title="Edit Asset Attributes"
+      title="Asset Information"
       open={visible}
       onCancel={handleCancel}
-      footer={[
-        <Button key="cancel" onClick={handleCancel}>
-          Cancel
-        </Button>,
-        <Button
-          key="save"
-          type="primary"
-          loading={loading}
-          onClick={handleSave}
-        >
-          Save
-        </Button>
-      ]}
+      okButtonProps={{ hidden: true }}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}
         layout="vertical"
-        initialValues={{
-          assetName: '',
-          attributeNames: []
-        }}
+        initialValues={{ assetName: '', attributeName: '' }}
       >
         <Form.Item
           name="assetName"
@@ -105,27 +58,22 @@ const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
           <Input readOnly placeholder="Enter asset name" />
         </Form.Item>
 
-        <Form.Item
-          name="attributeNames"
-          label="Attribute Names"
-          rules={[
-            { required: true, message: 'Please select at least one attribute' },
-            { type: 'array', min: 1, message: 'Please select at least one attribute' }
-          ]}
-        >
-          <Select
-            mode="multiple"
-            placeholder="Select attribute names"
-            options={availableAttributeNames.map(name => ({
-              label: name,
-              value: name
-            }))}
-            showSearch
-            filterOption={(input, option) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-            }
+        {selectedAttributeName ? (
+          <Form.Item
+            name="attributeName"
+            label="Attribute Name"
+          >
+            <Input readOnly placeholder="Enter attribute name" />
+          </Form.Item>
+        ) : (
+          <Table
+            dataSource={availableAttributeNames.map(name => ({ key: name, name }))}
+            columns={[{ title: 'Attribute', dataIndex: 'name', key: 'name' }]}
+            pagination={false}
+            size="small"
+            scroll={{ y: 180 }}
           />
-        </Form.Item>
+        )}
       </Form>
     </Modal>
   );

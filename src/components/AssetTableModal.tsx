@@ -38,7 +38,6 @@ const AssetTableModal: React.FC<AssetTableModalProps> = ({
   }, [visible, querySource, form]);
 
   const handleCancel = () => {
-    form.resetFields();
     onCancel();
   };
 
@@ -63,7 +62,7 @@ const AssetTableModal: React.FC<AssetTableModalProps> = ({
 
   return (
     <Modal
-      title="Edit Table Configuration"
+      title="Table Information"
       open={visible}
       onCancel={handleCancel}
       width={800}

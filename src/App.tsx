@@ -1,11 +1,10 @@
 import { useRef, useState } from 'react'
 import Editor, { useMonaco, type Monaco } from '@monaco-editor/react'
-import { editor as MonacoEditor, Range } from 'monaco-editor';
+import { editor as MonacoEditor } from 'monaco-editor';
 import './App.css'
 import { APP_DECORATION_PREFIX, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource } from './constants';
-import { uniqueId } from 'lodash';
-import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySource } from "./models/IRawQuerySource";
-import { QueryProcessor } from './implementations/QueryProcessor';
+import { debounce, uniqueId } from 'lodash';
+import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySourceVM } from "./models/IRawQuerySource";
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
 import QueryResultTable from './components/QueryResultTable';
 import AssetAttributeModal from './components/AssetAttributeModal';
@@ -13,20 +12,23 @@ import AssetTableModal from './components/AssetTableModal';
 import DataQueryArgumentPanel from './components/DataQueryArgumentPanel';
 import type { IDataQueryArgument } from './models/IDataQueryArgument';
 import { Button, notification } from 'antd';
+import HiddenConvertEditor, { type IHiddenConvertCommand, type IHiddenConvertResult } from './components/HiddenConvertEditor';
 
-const { TrackedRangeStickiness, InjectedTextCursorStops } = MonacoEditor;
+const { TrackedRangeStickiness } = MonacoEditor;
 
-type DecorationRef = {
-  [key: string]: {
-    range: Range;
-    content: string;
-  }
+type DecorationSourceRef = {
+  [key: string]: IRawQuerySourceVM
+}
+
+type QuerySourceRef = {
+  [key: string]: IRawQuerySourceVM;
 }
 
 function App() {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor>(null);
   const monaco = useMonaco()!;
-  const decorationsRef = useRef<DecorationRef>({});
+  const decorationsSourceRef = useRef<DecorationSourceRef>({});
+  const querySourcesRef = useRef<QuerySourceRef>({});
   const [noti, contextHolder] = notification.useNotification();
 
   const [sqlQuery, setSqlQuery] = useState(``)
@@ -34,55 +36,90 @@ function App() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
   const [isTableModalVisible, setIsTableModalVisible] = useState(false);
-  const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySource | null>(null);
+  const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySourceVM | null>(null);
   const [queryArguments, setQueryArguments] = useState<IDataQueryArgument[]>([]);
 
-  const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
+  const _removeAffectedSources = (ev: MonacoEditor.IModelContentChangedEvent) => {
     const editor = editorRef.current!;
-    console.log(ev);
-
+    const model = editor.getModel()!;
     ev.changes.forEach(change => {
       const changedRange = new monaco.Range(change.range.startLineNumber, change.range.startColumn, change.range.endLineNumber, change.range.endColumn);
-      const affectedIds = (editor.getDecorationsInRange(changedRange) || [])
+      const affectedSources = (editor.getDecorationsInRange(changedRange) || [])
         .filter(d => d.options?.inlineClassName?.startsWith(APP_DECORATION_PREFIX))
-        .filter(d => {
-          const cachedDecoration = decorationsRef.current[d.id];
-          const content = editor.getModel()?.getValueInRange(d.range);
-          return content !== cachedDecoration?.content;
-        }).map(d => d.id);
+        .map(d => {
+          const querySource = decorationsSourceRef.current[d.id];
+          const range = model.getDecorationRange(querySource.decorationIds[0])!;
+          const currentRangeContent = model.getValueInRange(range);
+          return { querySource, currentRangeContent };
+        })
+        .filter(({ querySource, currentRangeContent }) => querySource.rangeContent !== currentRangeContent);
 
-      if (affectedIds.length) {
-        editor.removeDecorations(affectedIds);
-        affectedIds.forEach(id => delete decorationsRef.current[id]);
+      if (affectedSources.length) {
+        affectedSources.forEach(source => {
+          const sourceRef = querySourcesRef.current[source.querySource.markup];
+          if (!sourceRef) return;
+          editor.removeDecorations(sourceRef.decorationIds);
+          sourceRef.decorationIds.forEach(decorationId => delete decorationsSourceRef.current[decorationId]);
+          delete querySourcesRef.current[source.querySource.markup];
+        });
       }
     });
+  }
 
+  const componentRef = useRef<{
+    hiddenConvert: (command: IHiddenConvertCommand) => Promise<IHiddenConvertResult>;
+    _removeAffectedSources: typeof _removeAffectedSources;
+    removeAffectedSources: typeof _removeAffectedSources;
+  }>({
+    hiddenConvert: async () => ({ query: '', sourceRangeMap: {} }),
+    _removeAffectedSources,
+    removeAffectedSources: debounce((ev) => componentRef.current._removeAffectedSources(ev), 100)
+  });
+  componentRef.current._removeAffectedSources = _removeAffectedSources;
+
+  const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
+    // console.log(ev);
+    componentRef.current.removeAffectedSources(ev);
     if (value !== undefined)
       setSqlQuery(value)
   }
 
-  const handleAssetColumnCountClick = (querySource: IRawQuerySource) => {
-    console.log('Clicked on a clickable decoration:', querySource);
+  const handleClickQuerySource = (querySource: IRawQuerySourceVM) => {
+    // console.log('Clicked on a clickable decoration:', querySource);
     setSelectedQuerySource(querySource);
 
-    if (querySource.type === QuerySource.ASSET_TABLE) {
-      setIsTableModalVisible(true);
-    } else if (querySource.type === QuerySource.TIMESERIES) {
-      setIsAssetModalVisible(true);
+    switch (querySource.type) {
+      case QuerySource.ASSET_TABLE:
+        setIsTableModalVisible(true);
+        break;
+      case QuerySource.TIMESERIES:
+        setIsAssetModalVisible(true);
+        break;
     }
   }
 
   const handleEditorDidMount = (editor: MonacoEditor.IStandaloneCodeEditor, _: Monaco) => {
     editorRef.current = editor;
+    const model = editor.getModel()!;
     editor.onMouseDown((e) => {
-      if (!('detail' in e.target) || typeof e.target.detail !== 'object' || !('injectedText' in e.target.detail))
-        return;
+      if (
+        !('detail' in e.target)
+        || typeof e.target.detail !== 'object' || !('injectedText' in e.target.detail)
+        || !e.target.range
+      ) return;
 
-      const injectedText = e.target.detail.injectedText as any;
-      const attachedData = injectedText?.options?.attachedData as IRawQuerySource;
-      if (!attachedData || (attachedData.type !== QuerySource.TIMESERIES && attachedData.type !== QuerySource.ASSET_TABLE)) return;
+      const classList = e.target.element?.classList;
+      const hasAppClass = classList && Array.from(classList).some(c => c.startsWith(APP_DECORATION_PREFIX));
+      if (!hasAppClass) return;
 
-      handleAssetColumnCountClick(attachedData);
+      const decoration = model.getDecorationsInRange(e.target.range)
+        ?.find(d => d.options?.inlineClassName?.startsWith(APP_DECORATION_PREFIX)
+          && d?.options?.after?.attachedData);
+
+      const attachedData = decoration?.options?.after?.attachedData as IRawQuerySourceVM;
+      if (!attachedData) return;
+
+      handleClickQuerySource(attachedData);
     });
   }
 
@@ -92,11 +129,11 @@ function App() {
     if (!selection) return;
 
     const SQL_TABLE_NAME = `"${tableName}"`;
-    const COLUMN_COUNT = 3;
     // Execute the edit to insert the table name
     editor.executeEdits('insert-table', [{
       range: selection,
-      text: SQL_TABLE_NAME
+      text: SQL_TABLE_NAME,
+      forceMoveMarkers: true
     }]);
 
     // After inserting, create decoration to highlight the inserted text
@@ -107,7 +144,15 @@ function App() {
       selection.startColumn + SQL_TABLE_NAME.length
     );
 
-    const querySource = newAssetTableQuerySource(uniqueId('markup_'), tableId);
+    // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
+    const decorationIds: string[] = [];
+    const querySource = {
+      ...newAssetTableQuerySource(uniqueId('markup_'), tableId),
+      decorationIds,
+      rangeContent: SQL_TABLE_NAME
+    };
+    querySourcesRef.current[querySource.markup] = querySource;
+
     const decorations = editor.createDecorationsCollection([
       {
         range: insertedRange,
@@ -117,18 +162,9 @@ function App() {
           hoverMessage: {
             value: `**Table:** ${tableName}\n\n**Columns:**\n- id (int)\n- name (text)\n- description (text)`
           },
-          before: {
-            content: 'TBL',
-            cursorStops: InjectedTextCursorStops.Both,
-            inlineClassName: `${APP_DECORATION_PREFIX}asset-table-before`,
-            inlineClassNameAffectsLetterSpacing: true
-          },
           after: {
             attachedData: querySource,
-            content: `${COLUMN_COUNT}☷`,
-            cursorStops: InjectedTextCursorStops.Both,
-            inlineClassName: `${APP_DECORATION_PREFIX}asset-table-after`,
-            inlineClassNameAffectsLetterSpacing: true
+            content: ''
           }
         }
       }
@@ -137,12 +173,12 @@ function App() {
     const range = decorations.getRange(0);
     if (range) {
       const decorationId = (decorations as any)._decorationIds[0];
-      decorationsRef.current[decorationId] = { range, content: SQL_TABLE_NAME };
+      decorationIds.push(decorationId);
+      decorationsSourceRef.current[decorationId] = querySource;
     }
 
-    editor.setPosition({ lineNumber: selection.startLineNumber, column: selection.startColumn + SQL_TABLE_NAME.length });
     editor.focus();
-    console.log('Table name inserted and highlighted:', tableName, decorations);
+    // console.log('Table name inserted and highlighted:', tableName, decorations);
 
     // Store decoration reference for potential removal later
     return decorations;
@@ -153,13 +189,13 @@ function App() {
     const selection = editor.getSelection();
     if (!selection) return;
 
-    const COLUMN_COUNT = 5;
     const ASSET_NAME = `asset_1`;
-    const SQL_ASSET_NAME = `'${ASSET_NAME}'`;
+    const SQL_ASSET_NAME = `"${ASSET_NAME}"`;
     // Execute the edit to insert the table name
     editor.executeEdits('insert-asset', [{
       range: selection,
-      text: SQL_ASSET_NAME
+      text: SQL_ASSET_NAME,
+      forceMoveMarkers: true
     }]);
 
     // After inserting, create decoration to highlight the inserted text
@@ -170,7 +206,15 @@ function App() {
       selection.startColumn + SQL_ASSET_NAME.length
     );
 
-    const querySource = newTimeseriesQuerySource(uniqueId('markup_'), DEFAULT_UUID, DEFAULT_ATTRIBUTE_NAMES);
+    // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
+    const decorationIds: string[] = [];
+    const querySource = {
+      ...newTimeseriesQuerySource(uniqueId('markup_'), DEFAULT_UUID),
+      decorationIds,
+      rangeContent: SQL_ASSET_NAME
+    };
+    querySourcesRef.current[querySource.markup] = querySource;
+
     const decorations = editor.createDecorationsCollection([
       {
         range: insertedRange,
@@ -178,20 +222,14 @@ function App() {
           inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
-            value: `**Asset:** ${ASSET_NAME}\n${DEFAULT_ATTRIBUTE_NAMES.map(name => `- ${name}`).join('\n')}`
-          },
-          before: {
-            content: 'AST',
-            cursorStops: InjectedTextCursorStops.Both,
-            inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-before`,
-            inlineClassNameAffectsLetterSpacing: true
+            value:
+              `**Asset:** ${ASSET_NAME}`
+              + '\n\n**Attribute**: temperature, humidity, pressure'
+              + '\n\n**Parent**: Level 1 / Level 2'
           },
           after: {
             attachedData: querySource,
-            content: `${COLUMN_COUNT}☷`,
-            cursorStops: InjectedTextCursorStops.Both,
-            inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-after`,
-            inlineClassNameAffectsLetterSpacing: true
+            content: ''
           }
         }
       }
@@ -200,45 +238,156 @@ function App() {
     const range = decorations.getRange(0);
     if (range) {
       const decorationId = (decorations as any)._decorationIds[0];
-      decorationsRef.current[decorationId] = { range, content: SQL_ASSET_NAME };
+      decorationIds.push(decorationId);
+      decorationsSourceRef.current[decorationId] = querySource;
     }
 
-    editor.setPosition({ lineNumber: selection.startLineNumber, column: selection.startColumn + SQL_ASSET_NAME.length });
     editor.focus();
-    console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, decorations);
+    // console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, decorations);
 
     // Store decoration reference for potential removal later
     return decorations;
   }
 
-  const getFinalQuery = () => {
-    const model = editorRef.current!.getModel()!;
-    const queryProcessor = new QueryProcessor(sqlQuery);
-    const sources: IRawQuerySource[] = [];
+  const onInsertSingleTimeseries = () => {
+    const editor = editorRef.current!;
+    const selection = editor.getSelection();
+    if (!selection) return;
 
-    for (const [decorationId] of Object.entries(decorationsRef.current)) {
-      const decorationOpts = model.getDecorationOptions(decorationId)!;
-      const decorationRange = model.getDecorationRange(decorationId)!;
-      const querySource = decorationOpts?.after?.attachedData as IRawQuerySource;
-      if (!querySource) continue;
+    const ASSET_NAME = `asset_1`;
+    const ATTRIBUTE_NAME = DEFAULT_ATTRIBUTE_NAMES[2];
+    const SQL_ASSET_NAME = `"${ASSET_NAME}"`;
+    const SQL_ATTRIBUTE_NAME = `"${ATTRIBUTE_NAME}"`;
+    const INSERT_TEXT = SQL_ASSET_NAME + '.' + SQL_ATTRIBUTE_NAME;
+    // Execute the edit to insert the table name
+    editor.executeEdits('insert-asset-attribute', [{
+      range: selection,
+      text: INSERT_TEXT,
+      forceMoveMarkers: true
+    }]);
 
-      sources.push(querySource);
-      switch (querySource.type) {
-        case QuerySource.ASSET_TABLE:
-          queryProcessor.replace(decorationRange, `"{{${querySource.markup}}}"`);
-          break;
-        case QuerySource.TIMESERIES:
-          queryProcessor.replace(decorationRange, `'{{${querySource.markup}}}'`);
-          break;
+    // After inserting, create decoration to highlight the inserted text
+    const insertedRange = new monaco.Range(
+      selection.startLineNumber,
+      selection.startColumn,
+      selection.startLineNumber,
+      selection.startColumn + INSERT_TEXT.length
+    );
+
+    const assetRange = new monaco.Range(
+      selection.startLineNumber,
+      selection.startColumn,
+      selection.startLineNumber,
+      selection.startColumn + SQL_ASSET_NAME.length
+    );
+
+    const dotRange = new monaco.Range(
+      selection.startLineNumber,
+      selection.startColumn + SQL_ASSET_NAME.length,
+      selection.startLineNumber,
+      selection.startColumn + SQL_ASSET_NAME.length + 1
+    );
+
+    const attributeRange = new monaco.Range(
+      selection.startLineNumber,
+      selection.startColumn + SQL_ASSET_NAME.length + 1,
+      selection.startLineNumber,
+      selection.startColumn + INSERT_TEXT.length
+    );
+
+    // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
+    const decorationIds: string[] = [];
+    const querySource = {
+      ...newTimeseriesQuerySource(uniqueId('markup_'), DEFAULT_UUID, ATTRIBUTE_NAME),
+      decorationIds,
+      rangeContent: INSERT_TEXT
+    };
+    querySourcesRef.current[querySource.markup] = querySource;
+
+    const hoverMessage = {
+      value:
+        `**Asset:** ${ASSET_NAME}`
+        + `\n\n**Attribute**: ${ATTRIBUTE_NAME}`
+        + '\n\n**Parent**: Level 1 / Level 2'
+    };
+
+    const decorations = editor.createDecorationsCollection([
+      {
+        range: insertedRange,
+        options: {
+          inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-container`,
+          stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          after: {
+            attachedData: querySource,
+            content: ''
+          }
+        }
+      },
+      {
+        range: assetRange,
+        options: {
+          inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-tag`,
+          stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          hoverMessage
+        }
+      },
+      {
+        range: dotRange,
+        options: {
+          inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-dot`,
+          stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+        }
+      },
+      {
+        range: attributeRange,
+        options: {
+          inlineClassName: `${APP_DECORATION_PREFIX}asset-attribute-tag`,
+          stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          hoverMessage
+        }
       }
+    ]);
+
+    const ranges = decorations.getRanges();
+    if (ranges) {
+      ranges.forEach((_, index) => {
+        const decorationId = (decorations as any)._decorationIds[index];
+        decorationIds.push(decorationId);
+        decorationsSourceRef.current[decorationId] = querySource;
+      });
     }
 
-    return { query: queryProcessor.query, sources };
+    editor.focus();
+    // console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, ATTRIBUTE_NAME, decorations);
+
+    // Store decoration reference for potential removal later
+    return decorations;
   }
 
-  const onCopyFinalQuery = () => {
-    const { query } = getFinalQuery();
-    console.log('Final query:', query);
+  const getConvertedQuery = async () => {
+    const model = editorRef.current!.getModel()!;
+    const sources = Object.values(querySourcesRef.current);
+    const decorations = model.getAllDecorations();
+    const decorationsMap: { [key: string]: MonacoEditor.IModelDecoration } = {};
+    decorations.forEach(d => decorationsMap[d.id] = d);
+
+    const { query, sourceRangeMap } = await componentRef.current.hiddenConvert({
+      decorationsMap,
+      sources,
+      query: sqlQuery
+    });
+
+    sources.forEach(source => {
+      const range = sourceRangeMap[source.markup];
+      if (range) source.range = range;
+    });
+
+    return { query, sources };
+  }
+
+  const onCopyConvertedQuery = async () => {
+    const { query } = await getConvertedQuery();
+    // console.log('Converted query:', query);
     navigator.clipboard.writeText(query);
   }
 
@@ -247,7 +396,7 @@ function App() {
       setIsExecuting(true);
       setQueryResults(null);
 
-      const { query, sources } = getFinalQuery();
+      const { query, sources } = await getConvertedQuery();
       const _arguments = convertArgumentsToDict(queryArguments);
       const requestBody: any = { query, sources, arguments: _arguments };
 
@@ -300,57 +449,6 @@ function App() {
     setSelectedQuerySource(null);
   };
 
-  const handleAssetModalSave = (updatedQuerySource: IRawQuerySource) => {
-    // Update the decoration with the new query source
-    if (editorRef.current && selectedQuerySource) {
-      const model = editorRef.current.getModel();
-      if (model) {
-        // Find and update the decoration
-        const decorations = model.getAllDecorations();
-        const targetDecoration = decorations.find(d => {
-          const attachedData = d.options?.after?.attachedData as IRawQuerySource;
-          return attachedData?.markup === selectedQuerySource.markup;
-        });
-
-        if (targetDecoration) {
-          // Create new decoration options with updated attached data
-          const afterOptions = targetDecoration.options?.after;
-          if (afterOptions) {
-            const newDecorationOptions = {
-              ...targetDecoration.options,
-              after: {
-                ...afterOptions,
-                content: `${updatedQuerySource.sourceConfig?.attributeNames?.length}☷`,
-                attachedData: updatedQuerySource
-              }
-            };
-
-            // Remove old decoration and create new one
-            editorRef.current.removeDecorations([targetDecoration.id]);
-            delete decorationsRef.current[targetDecoration.id];
-
-            const newDecorations = editorRef.current.createDecorationsCollection([{
-              range: targetDecoration.range,
-              options: newDecorationOptions
-            }]);
-
-            // Update the decorationsRef
-            const newDecorationId = (newDecorations as any)._decorationIds[0];
-            if (newDecorationId) {
-              decorationsRef.current[newDecorationId] = {
-                range: targetDecoration.range,
-                content: model.getValueInRange(targetDecoration.range)
-              };
-            }
-          }
-        }
-      }
-    }
-
-    setIsAssetModalVisible(false);
-    setSelectedQuerySource(null);
-  };
-
   const handleTableModalCancel = () => {
     setIsTableModalVisible(false);
     setSelectedQuerySource(null);
@@ -373,29 +471,22 @@ function App() {
       {contextHolder}
       <main className="editor-container">
         <div className="query-info">
-          <h3>Query Information</h3>
-          <div className="info-item">
-            <strong>Lines:</strong> {sqlQuery.split('\n').length}
-          </div>
-          <div className="info-item">
-            <strong>Characters:</strong> {sqlQuery.length}
-          </div>
-          <div className="info-item">
-            <strong>Words:</strong> {sqlQuery.split(/\s+/).filter(word => word.length > 0).length}
-          </div>
-
+          <h3>Query Builder</h3>
           <div className='btn-group flex flex-col gap-2'>
             <Button onClick={onInsertTable('table_1', DEFAULT_UUID)} type='primary'>
               ✨ Insert Table
             </Button>
             <Button onClick={onInsertAssetTimeseries} type='primary'>
-              ✨ Insert Asset Timeseries
+              ✨ Insert Timeseries (Multiple)
+            </Button>
+            <Button onClick={onInsertSingleTimeseries} type='primary'>
+              ✨ Insert Timeseries (Single)
             </Button>
             <Button onClick={onInsertTable('table_2', 'e2d4d7fe-9722-44df-b8a2-500acc8c7101')} type='primary'>
               ✨ Insert Invalid Table
             </Button>
-            <Button onClick={onCopyFinalQuery} type='primary'>
-              ✨ Copy Final Query
+            <Button onClick={onCopyConvertedQuery} type='primary'>
+              ✨ Copy Converted Query
             </Button>
             <Button onClick={onExecuteQuery} disabled={isExecuting} type='primary'>
               {isExecuting ? '⏳ Executing...' : '✨ Execute Query'}
@@ -470,7 +561,6 @@ function App() {
       <AssetAttributeModal
         visible={isAssetModalVisible}
         onCancel={handleAssetModalCancel}
-        onSave={handleAssetModalSave}
         querySource={selectedQuerySource}
       />
 
@@ -480,6 +570,8 @@ function App() {
         onCancel={handleTableModalCancel}
         querySource={selectedQuerySource}
       />
+
+      <HiddenConvertEditor parentRef={componentRef.current} />
     </div>
   )
 }

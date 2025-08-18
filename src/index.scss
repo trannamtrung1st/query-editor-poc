@@ -10,6 +10,9 @@ $secondary-blue: #2a5298;
 $accent-green: #10b981;
 $accent-green-dark: #059669;
 $yellow: #f59e0b;
+$yellow-dark: #d97706;
+$red: #ef4444;
+$red-dark: #b91c1c;
 $text-white: #ffffff;
 $text-black: #000000;
 $text-blue-light: #e0e7ff;
@@ -58,39 +61,36 @@ $bg-transparent: rgba(255, 255, 255, 0.1);
 
 .__app__ {
 
-  &asset-timeseries-before,
-  &asset-table-before {
-    background: linear-gradient(135deg, $primary-blue 100%, $accent-green-dark 100%);
-    padding: 0 4px;
-    border-radius: 4px;
-    outline: 1px solid rgba(255, 255, 255, 0.3);
-    display: inline-block;
-    vertical-align: middle;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    position: relative;
-    cursor: pointer;
-  }
-
-  &asset-timeseries-after,
-  &asset-table-after {
-    background: linear-gradient(135deg, $yellow 100%, $yellow 100%);
-    color: $text-black !important;
-    padding: 0 4px;
-    border-radius: 4px;
-    outline: 1px solid rgba(255, 255, 255, 0.3);
-    display: inline-block;
-    vertical-align: middle;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    position: relative;
-    cursor: pointer;
-  }
-
-  &asset-timeseries-tag,
-  &asset-table-tag {
+  &asset-timeseries-tag {
     background: linear-gradient(135deg, $accent-green 0%, $accent-green-dark 100%);
     color: $text-black !important;
+
+    &::before {
+      background: linear-gradient(135deg, $accent-green 0%, $accent-green-dark 100%);
+    }
+  }
+
+  &asset-attribute-tag {
+    background: linear-gradient(135deg, $yellow 0%, $yellow-dark 100%);
+    color: $text-black !important;
+
+    &::before {
+      background: linear-gradient(135deg, $yellow 0%, $yellow-dark 100%);
+    }
+  }
+
+  &asset-table-tag {
+    background: linear-gradient(135deg, $red-dark 0%, $red 100%);
+    color: $text-white !important;
+
+    &::before {
+      background: linear-gradient(135deg, $red-dark 0%, $red 100%);
+    }
+  }
+
+  &asset-attribute-tag,
+  &asset-timeseries-tag,
+  &asset-table-tag {
     border-radius: 4px;
     outline: 1px solid rgba(255, 255, 255, 0.3);
     display: inline-block;
@@ -105,7 +105,6 @@ $bg-transparent: rgba(255, 255, 255, 0.1);
       content: '';
       position: absolute;
       inset: -1px;
-      background: linear-gradient(135deg, $accent-green, $accent-green-dark);
       border-radius: 5px;
       z-index: -1;
       opacity: 0.3;

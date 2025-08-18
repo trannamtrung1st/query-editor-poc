@@ -210,7 +210,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       title="Query Arguments"
       size="small"
       style={{ height: '100%' }}
-      bodyStyle={{ padding: '12px' }}
+      styles={{ body: { padding: '12px' } }}
     >
       <div style={{ marginBottom: 16 }}>
         <Button

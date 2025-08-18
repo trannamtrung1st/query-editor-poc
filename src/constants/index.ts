@@ -17,3 +17,8 @@ export enum QuerySource {
     TIMESERIES = "timeseries",
     QUERY = "query"
 }
+
+export enum TimeseriesMode {
+    MULTIPLE = "multiple",
+    SINGLE = "single"
+}

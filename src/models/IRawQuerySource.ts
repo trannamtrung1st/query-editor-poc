@@ -1,11 +1,18 @@
-import { QuerySource } from "../constants";
+import type { IRange } from "monaco-editor";
+import { QuerySource, TimeseriesMode } from "../constants";
 
 export interface IRawQuerySource {
     markup: string;
+    range?: IRange; // [NOTE] only when submit create/update
     type: QuerySource;
     sourceId: string;
     sourceIdUuid?: string;
     sourceConfig?: any;
+}
+
+export interface IRawQuerySourceVM extends IRawQuerySource {
+    decorationIds: string[];
+    rangeContent: string;
 }
 
 export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQuerySource => {
@@ -20,7 +27,7 @@ export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQ
     }
 }
 
-export const newTimeseriesQuerySource = (markup: string, assetId: string, attributeNames: string[]): IRawQuerySource => {
+export const newTimeseriesQuerySource = (markup: string, assetId: string, attributeName?: string): IRawQuerySource => {
     return {
         markup,
         type: QuerySource.TIMESERIES,
@@ -28,7 +35,8 @@ export const newTimeseriesQuerySource = (markup: string, assetId: string, attrib
         sourceIdUuid: assetId,
         sourceConfig: {
             assetId,
-            attributeNames
+            attributeName,
+            mode: attributeName ? TimeseriesMode.SINGLE : TimeseriesMode.MULTIPLE
         }
     }
 }
