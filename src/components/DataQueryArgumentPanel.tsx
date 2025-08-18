@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
 import { Card, Input, Select, Button, Table, InputNumber, Switch } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { IDataQueryParam } from '../models/IDataQueryParam';
 import type { IDataQueryArgument } from '../models/IDataQueryArgument';
 import { GenericDataTypes } from '../constants';
-
-interface DataQueryParamWithKey extends IDataQueryParam {
-  key: string;
-}
 
 interface DataQueryArgumentPanelProps {
   _arguments: IDataQueryArgument[];
@@ -27,46 +23,34 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
   _arguments,
   setArguments
 }) => {
-  const [params, setParams] = useState<DataQueryParamWithKey[]>([]);
+  const params = useMemo(() => _arguments.map(a => a.param), [_arguments]);
 
   const handleAddParam = () => {
-    const newKey = (params.length + 1).toString();
-    const newParam: DataQueryParamWithKey = {
+    const newKey = (_arguments.length + 1).toString();
+    const newParam: IDataQueryParam = {
+      id: newKey,
       name: '',
-      dataType: GenericDataTypes.Text,
-      key: newKey
+      dataType: GenericDataTypes.Text
     };
-    const newParams = [...params, newParam];
-    setParams(newParams);
 
-    // Create corresponding argument with empty value
     const newArgument: IDataQueryArgument = {
-      param: { name: '', dataType: GenericDataTypes.Text },
-      value: ''
+      param: newParam,
+      value: undefined
     };
     const newArguments = [..._arguments, newArgument];
     setArguments(newArguments);
   };
 
-  const handleDeleteParam = (key: string) => {
-    const index = params.findIndex(p => p.key === key);
+  const handleDeleteParam = (id: string) => {
+    const index = _arguments.findIndex(p => p.param.id === id);
     if (index !== -1) {
-      const newParams = params.filter(param => param.key !== key);
       const newArguments = _arguments.filter((_, i) => i !== index);
-
-      setParams(newParams);
       setArguments(newArguments);
     }
   };
 
-  const handleParamChange = (key: string, field: keyof IDataQueryParam, value: any) => {
-    const newParams = params.map(param =>
-      param.key === key ? { ...param, [field]: value } : param
-    );
-    setParams(newParams);
-
-    // Update corresponding argument name
-    const index = params.findIndex(p => p.key === key);
+  const handleParamChange = (id: string, field: keyof IDataQueryParam, value: any) => {
+    const index = params.findIndex(p => p.id === id);
     if (index !== -1) {
       const newArguments = [..._arguments];
       newArguments[index] = {
@@ -77,8 +61,8 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
     }
   };
 
-  const handleArgumentChange = (key: string, value: any) => {
-    const index = params.findIndex(p => p.key === key);
+  const handleArgumentChange = (id: string, value: any) => {
+    const index = _arguments.findIndex(p => p.param.id === id);
     if (index !== -1) {
       const newArguments = [..._arguments];
       newArguments[index] = { ...newArguments[index], value };
@@ -86,8 +70,8 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
     }
   };
 
-  const renderValueInput = (param: DataQueryParamWithKey) => {
-    const argument = _arguments[params.findIndex(p => p.key === param.key)];
+  const renderValueInput = (param: IDataQueryParam) => {
+    const argument = _arguments.find(p => p.param.id === param.id);
     if (!argument) return null;
 
     switch (param.dataType) {
@@ -95,7 +79,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Input
             value={argument.value}
-            onChange={(e) => handleArgumentChange(param.key, e.target.value)}
+            onChange={(e) => handleArgumentChange(param.id, e.target.value)}
             placeholder="Enter string value"
             size="small"
           />
@@ -104,7 +88,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <InputNumber
             value={argument.value}
-            onChange={(value) => handleArgumentChange(param.key, value)}
+            onChange={(value) => handleArgumentChange(param.id, value)}
             placeholder="Enter integer value"
             style={{ width: '100%' }}
             size="small"
@@ -114,7 +98,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <InputNumber
             value={argument.value}
-            onChange={(value) => handleArgumentChange(param.key, value)}
+            onChange={(value) => handleArgumentChange(param.id, value)}
             placeholder="Enter float value"
             step={0.01}
             style={{ width: '100%' }}
@@ -125,7 +109,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Switch
             checked={argument.value}
-            onChange={(checked) => handleArgumentChange(param.key, checked)}
+            onChange={(checked) => handleArgumentChange(param.id, checked)}
             size="small"
           />
         );
@@ -133,7 +117,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Input
             value={argument.value}
-            onChange={(e) => handleArgumentChange(param.key, e.target.value)}
+            onChange={(e) => handleArgumentChange(param.id, e.target.value)}
             placeholder="yyyy-MM-ddTHH:mm:ss.sssZ"
             size="small"
           />
@@ -142,7 +126,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Input
             value={argument.value}
-            onChange={(e) => handleArgumentChange(param.key, e.target.value)}
+            onChange={(e) => handleArgumentChange(param.id, e.target.value)}
             placeholder="Enter value"
             size="small"
           />
@@ -156,10 +140,10 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataIndex: 'name',
       key: 'name',
       width: 120,
-      render: (text: string, record: DataQueryParamWithKey) => (
+      render: (text: string, record: IDataQueryParam) => (
         <Input
           value={text}
-          onChange={(e) => handleParamChange(record.key, 'name', e.target.value)}
+          onChange={(e) => handleParamChange(record.id, 'name', e.target.value)}
           placeholder="Parameter name"
           size="small"
         />
@@ -170,11 +154,11 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataIndex: 'dataType',
       key: 'dataType',
       width: 100,
-      render: (text: string, record: DataQueryParamWithKey) => (
+      render: (text: string, record: IDataQueryParam) => (
         <Select
           value={text}
           onChange={(value) => {
-            handleParamChange(record.key, 'dataType', value);
+            handleParamChange(record.id, 'dataType', value);
           }}
           style={{ width: '100%' }}
           options={availableDataTypes}
@@ -187,19 +171,19 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataIndex: 'value',
       key: 'value',
       width: 120,
-      render: (_: any, record: DataQueryParamWithKey) => renderValueInput(record)
+      render: (_: any, record: IDataQueryParam) => renderValueInput(record)
     },
     {
       title: 'Action',
       key: 'action',
       width: 60,
-      render: (_: any, record: DataQueryParamWithKey) => (
+      render: (_: any, record: IDataQueryParam) => (
         <Button
           type="text"
           danger
           icon={<DeleteOutlined />}
           size="small"
-          onClick={() => handleDeleteParam(record.key)}
+          onClick={() => handleDeleteParam(record.id)}
         />
       )
     }
@@ -228,7 +212,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         columns={columns}
         pagination={false}
         size="small"
-        rowKey="key"
+        rowKey="id"
         scroll={{ x: 400, y: 300 }}
         style={{ overflow: 'auto' }}
       />

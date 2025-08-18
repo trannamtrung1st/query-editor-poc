@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
 import Editor, { useMonaco, type Monaco } from '@monaco-editor/react'
-import { editor as MonacoEditor } from 'monaco-editor';
+import { editor as MonacoEditor, type IRange } from 'monaco-editor';
 import './App.css'
-import { APP_DECORATION_PREFIX, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource } from './constants';
+import { APP_DECORATION_PREFIX, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource, TimeseriesMode } from './constants';
 import { debounce, uniqueId } from 'lodash';
-import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySourceVM } from "./models/IRawQuerySource";
+import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySource, type IRawQuerySourceVM } from "./models/IRawQuerySource";
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
 import QueryResultTable from './components/QueryResultTable';
 import AssetAttributeModal from './components/AssetAttributeModal';
@@ -12,13 +12,11 @@ import AssetTableModal from './components/AssetTableModal';
 import DataQueryArgumentPanel from './components/DataQueryArgumentPanel';
 import type { IDataQueryArgument } from './models/IDataQueryArgument';
 import { Button, notification } from 'antd';
+import JsonModelModal from './components/JsonModelModal';
 import HiddenConvertEditor, { type IHiddenConvertCommand, type IHiddenConvertResult } from './components/HiddenConvertEditor';
+import type { IDataQuery } from './models/IDataQuery';
 
 const { TrackedRangeStickiness } = MonacoEditor;
-
-type DecorationSourceRef = {
-  [key: string]: IRawQuerySourceVM
-}
 
 type QuerySourceRef = {
   [key: string]: IRawQuerySourceVM;
@@ -27,27 +25,36 @@ type QuerySourceRef = {
 function App() {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor>(null);
   const monaco = useMonaco()!;
-  const decorationsSourceRef = useRef<DecorationSourceRef>({});
   const querySourcesRef = useRef<QuerySourceRef>({});
   const [noti, contextHolder] = notification.useNotification();
 
-  const [sqlQuery, setSqlQuery] = useState(``)
   const [queryResults, setQueryResults] = useState<IExecuteDataQueryResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
   const [isTableModalVisible, setIsTableModalVisible] = useState(false);
   const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySourceVM | null>(null);
   const [queryArguments, setQueryArguments] = useState<IDataQueryArgument[]>([]);
+  const [isJsonModelModalVisible, setIsJsonModelModalVisible] = useState(false);
 
   const _removeAffectedSources = (ev: MonacoEditor.IModelContentChangedEvent) => {
     const editor = editorRef.current!;
     const model = editor.getModel()!;
     ev.changes.forEach(change => {
-      const changedRange = new monaco.Range(change.range.startLineNumber, change.range.startColumn, change.range.endLineNumber, change.range.endColumn);
-      const affectedSources = (editor.getDecorationsInRange(changedRange) || [])
-        .filter(d => d.options?.inlineClassName?.startsWith(APP_DECORATION_PREFIX))
+      const lineCount = change.text?.split('\n').length + 1 || 1;
+      const hasMoreLines = change.range.endLineNumber - change.range.startLineNumber + 1 < lineCount;
+      const endLineNumber = hasMoreLines ? lineCount + 1 : change.range.endLineNumber;
+      const endColumn = hasMoreLines ? 0 : change.range.endColumn;
+      const decorations = model.getDecorationsInRange(new monaco.Range(
+        change.range.startLineNumber,
+        change.range.startColumn,
+        endLineNumber,
+        endColumn
+      ));
+
+      const affectedSources = decorations
+        .filter(d => d.options?.inlineClassName?.startsWith(APP_DECORATION_PREFIX) && d.options?.after?.attachedData)
         .map(d => {
-          const querySource = decorationsSourceRef.current[d.id];
+          const querySource = d.options?.after?.attachedData as IRawQuerySourceVM;
           const range = model.getDecorationRange(querySource.decorationIds[0])!;
           const currentRangeContent = model.getValueInRange(range);
           return { querySource, currentRangeContent };
@@ -59,7 +66,6 @@ function App() {
           const sourceRef = querySourcesRef.current[source.querySource.markup];
           if (!sourceRef) return;
           editor.removeDecorations(sourceRef.decorationIds);
-          sourceRef.decorationIds.forEach(decorationId => delete decorationsSourceRef.current[decorationId]);
           delete querySourcesRef.current[source.querySource.markup];
         });
       }
@@ -77,11 +83,9 @@ function App() {
   });
   componentRef.current._removeAffectedSources = _removeAffectedSources;
 
-  const handleEditorChange = (value: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
+  const handleEditorChange = (_: string | undefined, ev: MonacoEditor.IModelContentChangedEvent) => {
     // console.log(ev);
     componentRef.current.removeAffectedSources(ev);
-    if (value !== undefined)
-      setSqlQuery(value)
   }
 
   const handleClickQuerySource = (querySource: IRawQuerySourceVM) => {
@@ -123,12 +127,17 @@ function App() {
     });
   }
 
-  const onInsertTable = (tableName: string, tableId: string) => () => {
+  const onInsertTable = (args: { selection: IRange | null, source?: IRawQuerySource, tableName?: string, tableId?: string }) => () => {
+    let { selection, source, tableName, tableId } = args;
     const editor = editorRef.current!;
-    const selection = editor.getSelection();
+    selection ??= editor.getSelection();
     if (!selection) return;
 
+    tableId ??= source?.sourceId ?? DEFAULT_UUID;
+    tableName ??= tableId === DEFAULT_UUID ? 'table_1' : 'table_2';
+    const markup = source?.markup ?? uniqueId('markup_');
     const SQL_TABLE_NAME = `"${tableName}"`;
+
     // Execute the edit to insert the table name
     editor.executeEdits('insert-table', [{
       range: selection,
@@ -146,8 +155,8 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource = {
-      ...newAssetTableQuerySource(uniqueId('markup_'), tableId),
+    const querySource: IRawQuerySourceVM = {
+      ...(source ?? newAssetTableQuerySource(markup, tableId)),
       decorationIds,
       rangeContent: SQL_TABLE_NAME
     };
@@ -174,7 +183,6 @@ function App() {
     if (range) {
       const decorationId = (decorations as any)._decorationIds[0];
       decorationIds.push(decorationId);
-      decorationsSourceRef.current[decorationId] = querySource;
     }
 
     editor.focus();
@@ -184,13 +192,17 @@ function App() {
     return decorations;
   }
 
-  const onInsertAssetTimeseries = () => {
+  const onInsertAssetTimeseries = (args: { selection: IRange | null, source?: IRawQuerySource }) => () => {
+    let { selection, source } = args;
     const editor = editorRef.current!;
-    const selection = editor.getSelection();
+    selection ??= editor.getSelection();
     if (!selection) return;
 
-    const ASSET_NAME = `asset_1`;
-    const SQL_ASSET_NAME = `"${ASSET_NAME}"`;
+    const assetId = source?.sourceId ?? DEFAULT_UUID;
+    const assetName = assetId === DEFAULT_UUID ? 'asset_1' : 'asset_2';
+    const markup = source?.markup ?? uniqueId('markup_');
+    const SQL_ASSET_NAME = `"${assetName}"`;
+
     // Execute the edit to insert the table name
     editor.executeEdits('insert-asset', [{
       range: selection,
@@ -208,8 +220,8 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource = {
-      ...newTimeseriesQuerySource(uniqueId('markup_'), DEFAULT_UUID),
+    const querySource: IRawQuerySourceVM = {
+      ...(source ?? newTimeseriesQuerySource(markup, assetId)),
       decorationIds,
       rangeContent: SQL_ASSET_NAME
     };
@@ -223,7 +235,7 @@ function App() {
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
             value:
-              `**Asset:** ${ASSET_NAME}`
+              `**Asset:** ${assetName}`
               + '\n\n**Attribute**: temperature, humidity, pressure'
               + '\n\n**Parent**: Level 1 / Level 2'
           },
@@ -239,26 +251,29 @@ function App() {
     if (range) {
       const decorationId = (decorations as any)._decorationIds[0];
       decorationIds.push(decorationId);
-      decorationsSourceRef.current[decorationId] = querySource;
     }
 
     editor.focus();
-    // console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, decorations);
+    // console.log('Asset timeseries inserted and highlighted:', assetName, decorations);
 
     // Store decoration reference for potential removal later
     return decorations;
   }
 
-  const onInsertSingleTimeseries = () => {
+  const onInsertSingleTimeseries = (args: { selection: IRange | null, source?: IRawQuerySource }) => () => {
+    let { selection, source } = args;
     const editor = editorRef.current!;
-    const selection = editor.getSelection();
+    selection ??= editor.getSelection();
     if (!selection) return;
 
-    const ASSET_NAME = `asset_1`;
-    const ATTRIBUTE_NAME = DEFAULT_ATTRIBUTE_NAMES[2];
-    const SQL_ASSET_NAME = `"${ASSET_NAME}"`;
-    const SQL_ATTRIBUTE_NAME = `"${ATTRIBUTE_NAME}"`;
+    const assetId = source?.sourceId ?? DEFAULT_UUID;
+    const assetName = assetId === DEFAULT_UUID ? 'asset_1' : 'asset_2';
+    const attributeName = source?.sourceConfig?.attributeName ?? DEFAULT_ATTRIBUTE_NAMES[2];
+    const markup = source?.markup ?? uniqueId('markup_');
+    const SQL_ASSET_NAME = `"${assetName}"`;
+    const SQL_ATTRIBUTE_NAME = `"${attributeName}"`;
     const INSERT_TEXT = SQL_ASSET_NAME + '.' + SQL_ATTRIBUTE_NAME;
+
     // Execute the edit to insert the table name
     editor.executeEdits('insert-asset-attribute', [{
       range: selection,
@@ -297,8 +312,8 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource = {
-      ...newTimeseriesQuerySource(uniqueId('markup_'), DEFAULT_UUID, ATTRIBUTE_NAME),
+    const querySource: IRawQuerySourceVM = {
+      ...(source ?? newTimeseriesQuerySource(markup, assetId, attributeName)),
       decorationIds,
       rangeContent: INSERT_TEXT
     };
@@ -306,8 +321,8 @@ function App() {
 
     const hoverMessage = {
       value:
-        `**Asset:** ${ASSET_NAME}`
-        + `\n\n**Attribute**: ${ATTRIBUTE_NAME}`
+        `**Asset:** ${assetName}`
+        + `\n\n**Attribute**: ${attributeName}`
         + '\n\n**Parent**: Level 1 / Level 2'
     };
 
@@ -353,12 +368,11 @@ function App() {
       ranges.forEach((_, index) => {
         const decorationId = (decorations as any)._decorationIds[index];
         decorationIds.push(decorationId);
-        decorationsSourceRef.current[decorationId] = querySource;
       });
     }
 
     editor.focus();
-    // console.log('Asset timeseries inserted and highlighted:', ASSET_NAME, ATTRIBUTE_NAME, decorations);
+    // console.log('Asset timeseries inserted and highlighted:', assetName, attributeName, decorations);
 
     // Store decoration reference for potential removal later
     return decorations;
@@ -370,11 +384,13 @@ function App() {
     const decorations = model.getAllDecorations();
     const decorationsMap: { [key: string]: MonacoEditor.IModelDecoration } = {};
     decorations.forEach(d => decorationsMap[d.id] = d);
+    const sourceDecorations = sources.map(source => ({
+      source, decoration: decorationsMap[source.decorationIds[0]]
+    }));
 
     const { query, sourceRangeMap } = await componentRef.current.hiddenConvert({
-      decorationsMap,
-      sources,
-      query: sqlQuery
+      sourceDecorations,
+      query: model.getValue()
     });
 
     sources.forEach(source => {
@@ -385,10 +401,64 @@ function App() {
     return { query, sources };
   }
 
-  const onCopyConvertedQuery = async () => {
-    const { query } = await getConvertedQuery();
-    // console.log('Converted query:', query);
-    navigator.clipboard.writeText(query);
+  const onLoadJsonModel = async () => {
+    setIsJsonModelModalVisible(true);
+  }
+
+  const handleJsonModelLoad = (queryModel: IDataQuery) => {
+    const { query, sources, parameters } = queryModel;
+    const editor = editorRef.current!;
+    const model = editor.getModel()!;
+    console.log(sources);
+
+    const oldDecorations = model.getAllDecorations();
+    editor.removeDecorations(oldDecorations.map(d => d.id));
+    model.setValue(query);
+
+    setQueryArguments(parameters.map(param => ({
+      param,
+      value: undefined
+    })));
+
+    const trackingDecorations = editor.createDecorationsCollection(sources.map(source => ({ range: source.range!, options: {} })));
+    const decorationIds: string[] = (trackingDecorations as any)._decorationIds;
+    const sourceTrackingDecorationMap: { [key: string]: string } = {};
+    sources.forEach((source, index) => {
+      sourceTrackingDecorationMap[source.markup] = decorationIds[index];
+    });
+
+    sources.forEach(source => {
+      const decorationId = sourceTrackingDecorationMap[source.markup];
+      const range = model.getDecorationRange(decorationId);
+      if (!range) return;
+
+      switch (source.type) {
+        case QuerySource.ASSET_TABLE:
+          onInsertTable({ selection: range, source })();
+          break;
+        case QuerySource.TIMESERIES:
+          if (source.sourceConfig?.mode === TimeseriesMode.SINGLE) {
+            onInsertSingleTimeseries({ selection: range, source })();
+          } else {
+            onInsertAssetTimeseries({ selection: range, source })();
+          }
+          break;
+      }
+    });
+
+    editor.removeDecorations(decorationIds);
+    setIsJsonModelModalVisible(false);
+  };
+
+  const handleJsonModelModalCancel = () => {
+    setIsJsonModelModalVisible(false);
+  };
+
+  const onCopyJsonModel = async () => {
+    const { query, sources } = await getConvertedQuery();
+    const parameters = queryArguments.map(arg => arg.param);
+    const model: IDataQuery = { query, sources, parameters };
+    navigator.clipboard.writeText(JSON.stringify(model, null, 2));
   }
 
   const onExecuteQuery = async () => {
@@ -473,20 +543,23 @@ function App() {
         <div className="query-info">
           <h3>Query Builder</h3>
           <div className='btn-group flex flex-col gap-2'>
-            <Button onClick={onInsertTable('table_1', DEFAULT_UUID)} type='primary'>
+            <Button onClick={onInsertTable({ selection: null, tableName: 'table_1', tableId: DEFAULT_UUID })} type='primary'>
               ✨ Insert Table
             </Button>
-            <Button onClick={onInsertAssetTimeseries} type='primary'>
+            <Button onClick={onInsertAssetTimeseries({ selection: null })} type='primary'>
               ✨ Insert Timeseries (Multiple)
             </Button>
-            <Button onClick={onInsertSingleTimeseries} type='primary'>
+            <Button onClick={onInsertSingleTimeseries({ selection: null })} type='primary'>
               ✨ Insert Timeseries (Single)
             </Button>
-            <Button onClick={onInsertTable('table_2', 'e2d4d7fe-9722-44df-b8a2-500acc8c7101')} type='primary'>
+            <Button onClick={onInsertTable({ selection: null, tableName: 'table_2', tableId: 'e2d4d7fe-9722-44df-b8a2-500acc8c7101' })} type='primary'>
               ✨ Insert Invalid Table
             </Button>
-            <Button onClick={onCopyConvertedQuery} type='primary'>
-              ✨ Copy Converted Query
+            <Button onClick={onCopyJsonModel} type='primary'>
+              ✨ Copy JSON Model
+            </Button>
+            <Button onClick={onLoadJsonModel} type='primary'>
+              ✨ Load JSON Model
             </Button>
             <Button onClick={onExecuteQuery} disabled={isExecuting} type='primary'>
               {isExecuting ? '⏳ Executing...' : '✨ Execute Query'}
@@ -498,7 +571,7 @@ function App() {
           <Editor
             height="100%"
             defaultLanguage="sql"
-            defaultValue={sqlQuery}
+            defaultValue={''}
             onMount={handleEditorDidMount}
             onChange={handleEditorChange}
             theme="vs-dark"
@@ -572,6 +645,13 @@ function App() {
       />
 
       <HiddenConvertEditor parentRef={componentRef.current} />
+
+      {/* JSON Model Modal */}
+      <JsonModelModal
+        visible={isJsonModelModalVisible}
+        onCancel={handleJsonModelModalCancel}
+        onLoad={handleJsonModelLoad}
+      />
     </div>
   )
 }

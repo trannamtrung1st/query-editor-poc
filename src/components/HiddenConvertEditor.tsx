@@ -3,11 +3,9 @@ import { useRef } from "react";
 import { editor as MonacoEditor, type IRange } from 'monaco-editor';
 import './HiddenConvertEditor.scss';
 import type { IRawQuerySourceVM } from "../models/IRawQuerySource";
-import { APP_DECORATION_PREFIX } from "../constants";
 
 export interface IHiddenConvertCommand {
-  decorationsMap: { [key: string]: MonacoEditor.IModelDecoration };
-  sources: IRawQuerySourceVM[];
+  sourceDecorations: { source: IRawQuerySourceVM, decoration: MonacoEditor.IModelDecoration }[];
   query: string;
 }
 
@@ -30,44 +28,40 @@ const HiddenConvertEditor: React.FC<IHiddenConvertEditorProps> = ({ parentRef })
   }
 
   parentRef.hiddenConvert = async (command: IHiddenConvertCommand): Promise<IHiddenConvertResult> => {
-    const { decorationsMap, sources, query } = command;
+    const { sourceDecorations, query } = command;
     const editor = editorRef.current!;
     const model = editor.getModel()!;
     const oldDecorations = model.getAllDecorations();
     editor.setValue(query);
     editor.removeDecorations(oldDecorations.map(d => d.id));
-    editor.createDecorationsCollection(Object.values(decorationsMap).map(d => ({
-      ...d,
-      options: {
-        ...d.options,
-        stickiness: MonacoEditor.TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges
-      }
+
+    const trackingDecorations = editor.createDecorationsCollection(sourceDecorations.map(({ decoration }) => ({
+      range: decoration.range, options: {}
     })));
+    const decorationIds: string[] = (trackingDecorations as any)._decorationIds;
+    const sourceTrackingDecorationMap: { [key: string]: string } = {};
+    sourceDecorations.forEach(({ source }, index) => {
+      sourceTrackingDecorationMap[source.markup] = decorationIds[index];
+    });
 
-    const edits: MonacoEditor.IIdentifiedSingleEditOperation[] = [];
-    const newDecorationSourceMap: { [key: string]: IRawQuerySourceVM } = {};
     const sourceRangeMap: { [key: string]: IRange } = {};
-
-    for (const source of sources) {
-      const decorationRange = decorationsMap[source.decorationIds[0]].range;
-      const newDecoration = model.getDecorationsInRange(decorationRange)
-        ?.find(d => d.options.inlineClassName?.startsWith(APP_DECORATION_PREFIX)
-          && d.options.after?.attachedData === source);
-      const querySource = newDecoration?.options.after?.attachedData as IRawQuerySourceVM;
-
-      if (newDecoration && querySource)
-        newDecorationSourceMap[newDecoration.id] = querySource;
-
-      edits.push({
-        range: decorationRange,
-        text: `"{{${source.markup}}}"`
-      });
-    }
-
-    editor.executeEdits('hidden-convert', edits);
-    for (const [decorationId, querySource] of Object.entries(newDecorationSourceMap)) {
+    for (const { source } of sourceDecorations) {
+      const decorationId = sourceTrackingDecorationMap[source.markup];
       const decorationRange = model.getDecorationRange(decorationId);
-      if (decorationRange) sourceRangeMap[querySource.markup] = decorationRange;
+      if (!decorationRange) continue;
+
+      const text = `"{{${source.markup}}}"`;
+      editor.executeEdits('hidden-convert', [{
+        range: decorationRange, text,
+        forceMoveMarkers: true
+      }]);
+
+      sourceRangeMap[source.markup] = {
+        startLineNumber: decorationRange.startLineNumber,
+        startColumn: decorationRange.startColumn,
+        endLineNumber: decorationRange.endLineNumber,
+        endColumn: decorationRange.startColumn + text.length
+      };
     }
 
     const currentQuery = model.getValue();
