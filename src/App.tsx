@@ -2,15 +2,15 @@ import { useRef, useState } from 'react'
 import Editor, { useMonaco, type Monaco } from '@monaco-editor/react'
 import { editor as MonacoEditor, type IRange } from 'monaco-editor';
 import './App.css'
-import { APP_DECORATION_PREFIX, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource, TimeseriesMode } from './constants';
+import { APP_DECORATION_PREFIX, APP_MAIN_DECORATION, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource, TimeseriesMode } from './constants';
 import { debounce, uniqueId } from 'lodash';
-import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySource, type IRawQuerySourceVM } from "./models/IRawQuerySource";
+import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySource, RawQuerySourceVM } from "./models/IRawQuerySource";
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
 import QueryResultTable from './components/QueryResultTable';
 import AssetAttributeModal from './components/AssetAttributeModal';
 import AssetTableModal from './components/AssetTableModal';
 import DataQueryArgumentPanel from './components/DataQueryArgumentPanel';
-import type { IDataQueryArgument } from './models/IDataQueryArgument';
+import { DataQueryArgumentVM } from './models/IDataQueryArgument';
 import { Button, notification } from 'antd';
 import JsonModelModal from './components/JsonModelModal';
 import HiddenConvertEditor, { type IHiddenConvertCommand, type IHiddenConvertResult } from './components/HiddenConvertEditor';
@@ -19,7 +19,7 @@ import type { IDataQuery } from './models/IDataQuery';
 const { TrackedRangeStickiness } = MonacoEditor;
 
 type QuerySourceRef = {
-  [key: string]: IRawQuerySourceVM;
+  [key: string]: RawQuerySourceVM;
 }
 
 function App() {
@@ -32,8 +32,8 @@ function App() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
   const [isTableModalVisible, setIsTableModalVisible] = useState(false);
-  const [selectedQuerySource, setSelectedQuerySource] = useState<IRawQuerySourceVM | null>(null);
-  const [queryArguments, setQueryArguments] = useState<IDataQueryArgument[]>([]);
+  const [selectedQuerySource, setSelectedQuerySource] = useState<RawQuerySourceVM | null>(null);
+  const [queryArguments, setQueryArguments] = useState<DataQueryArgumentVM[]>([]);
   const [isJsonModelModalVisible, setIsJsonModelModalVisible] = useState(false);
 
   const _removeAffectedSources = (ev: MonacoEditor.IModelContentChangedEvent) => {
@@ -52,9 +52,9 @@ function App() {
       ));
 
       const affectedSources = decorations
-        .filter(d => d.options?.inlineClassName?.startsWith(APP_DECORATION_PREFIX) && d.options?.after?.attachedData)
+        .filter(d => d.options?.className === APP_MAIN_DECORATION)
         .map(d => {
-          const querySource = d.options?.after?.attachedData as IRawQuerySourceVM;
+          const querySource = d.options?.after?.attachedData as RawQuerySourceVM;
           const range = model.getDecorationRange(querySource.decorationIds[0])!;
           const currentRangeContent = model.getValueInRange(range);
           return { querySource, currentRangeContent };
@@ -88,7 +88,7 @@ function App() {
     componentRef.current.removeAffectedSources(ev);
   }
 
-  const handleClickQuerySource = (querySource: IRawQuerySourceVM) => {
+  const handleClickQuerySource = (querySource: RawQuerySourceVM) => {
     // console.log('Clicked on a clickable decoration:', querySource);
     setSelectedQuerySource(querySource);
 
@@ -113,14 +113,13 @@ function App() {
       ) return;
 
       const classList = e.target.element?.classList;
-      const hasAppClass = classList && Array.from(classList).some(c => c.startsWith(APP_DECORATION_PREFIX));
+      const hasAppClass = classList && Array.from(classList).includes(APP_MAIN_DECORATION);
       if (!hasAppClass) return;
 
       const decoration = model.getDecorationsInRange(e.target.range)
-        ?.find(d => d.options?.inlineClassName?.startsWith(APP_DECORATION_PREFIX)
-          && d?.options?.after?.attachedData);
+        ?.find(d => d.options?.className === APP_MAIN_DECORATION);
 
-      const attachedData = decoration?.options?.after?.attachedData as IRawQuerySourceVM;
+      const attachedData = decoration?.options?.after?.attachedData as RawQuerySourceVM;
       if (!attachedData) return;
 
       handleClickQuerySource(attachedData);
@@ -155,17 +154,18 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource: IRawQuerySourceVM = {
-      ...(source ?? newAssetTableQuerySource(markup, tableId)),
+    const querySource = new RawQuerySourceVM(
+      source ?? newAssetTableQuerySource(markup, tableId),
       decorationIds,
-      rangeContent: SQL_TABLE_NAME
-    };
+      SQL_TABLE_NAME
+    );
     querySourcesRef.current[querySource.markup] = querySource;
 
     const decorations = editor.createDecorationsCollection([
       {
         range: insertedRange,
         options: {
+          className: APP_MAIN_DECORATION,
           inlineClassName: `${APP_DECORATION_PREFIX}asset-table-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
@@ -220,17 +220,18 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource: IRawQuerySourceVM = {
-      ...(source ?? newTimeseriesQuerySource(markup, assetId)),
+    const querySource = new RawQuerySourceVM(
+      source ?? newTimeseriesQuerySource(markup, assetId),
       decorationIds,
-      rangeContent: SQL_ASSET_NAME
-    };
+      SQL_ASSET_NAME
+    );
     querySourcesRef.current[querySource.markup] = querySource;
 
     const decorations = editor.createDecorationsCollection([
       {
         range: insertedRange,
         options: {
+          className: APP_MAIN_DECORATION,
           inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
@@ -312,11 +313,11 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource: IRawQuerySourceVM = {
-      ...(source ?? newTimeseriesQuerySource(markup, assetId, attributeName)),
+    const querySource = new RawQuerySourceVM(
+      source ?? newTimeseriesQuerySource(markup, assetId, attributeName),
       decorationIds,
-      rangeContent: INSERT_TEXT
-    };
+      INSERT_TEXT
+    );
     querySourcesRef.current[querySource.markup] = querySource;
 
     const hoverMessage = {
@@ -330,6 +331,7 @@ function App() {
       {
         range: insertedRange,
         options: {
+          className: APP_MAIN_DECORATION,
           inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-container`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           after: {
@@ -415,10 +417,7 @@ function App() {
     editor.removeDecorations(oldDecorations.map(d => d.id));
     model.setValue(query);
 
-    setQueryArguments(parameters.map(param => ({
-      param,
-      value: undefined
-    })));
+    setQueryArguments(parameters.map(param => new DataQueryArgumentVM(param)));
 
     const trackingDecorations = editor.createDecorationsCollection(sources.map(source => ({ range: source.range!, options: {} })));
     const decorationIds: string[] = (trackingDecorations as any)._decorationIds;
@@ -456,7 +455,7 @@ function App() {
 
   const onCopyJsonModel = async () => {
     const { query, sources } = await getConvertedQuery();
-    const parameters = queryArguments.map(arg => arg.param);
+    const parameters = queryArguments.map(arg => arg.parameter);
     const model: IDataQuery = { query, sources, parameters };
     navigator.clipboard.writeText(JSON.stringify(model, null, 2));
   }
@@ -467,8 +466,11 @@ function App() {
       setQueryResults(null);
 
       const { query, sources } = await getConvertedQuery();
-      const _arguments = convertArgumentsToDict(queryArguments);
-      const requestBody: any = { query, sources, arguments: _arguments };
+      const parameters = queryArguments.map(arg => arg.parameter);
+      const requestBody: any = {
+        query, sources, parameters,
+        arguments: queryArguments
+      };
 
       const response = await fetch('http://localhost:5053/dqry/queries/execute', {
         method: 'POST',
@@ -522,18 +524,6 @@ function App() {
   const handleTableModalCancel = () => {
     setIsTableModalVisible(false);
     setSelectedQuerySource(null);
-  };
-
-  const convertArgumentsToDict = (arguments_: IDataQueryArgument[]): Record<string, any> => {
-    const argumentsObj: Record<string, IDataQueryArgument> = {};
-
-    arguments_
-      .filter(arg => arg.param.name.trim() && arg.value !== null && arg.value !== undefined && arg.value !== '')
-      .forEach(arg => {
-        argumentsObj[arg.param.name.trim()] = arg;
-      });
-
-    return argumentsObj;
   };
 
   return (

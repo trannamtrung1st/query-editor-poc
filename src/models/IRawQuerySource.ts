@@ -10,9 +10,33 @@ export interface IRawQuerySource {
     sourceConfig?: any;
 }
 
-export interface IRawQuerySourceVM extends IRawQuerySource {
-    decorationIds: string[];
-    rangeContent: string;
+export class RawQuerySourceVM implements IRawQuerySource {
+    #decorationIds: string[];
+    #rangeContent: string;
+
+    markup: string;
+    range?: IRange;
+    type: QuerySource;
+    sourceId: string;
+    sourceIdUuid?: string;
+    sourceConfig?: any;
+
+    constructor(source: IRawQuerySource, decorationIds: string[], rangeContent: string) {
+        this.markup = source.markup;
+        this.range = source.range;
+        this.type = source.type;
+        this.sourceId = source.sourceId;
+        this.sourceIdUuid = source.sourceIdUuid;
+        this.sourceConfig = source.sourceConfig;
+        this.#decorationIds = decorationIds;
+        this.#rangeContent = rangeContent;
+    }
+
+    get decorationIds() { return this.#decorationIds; }
+    set decorationIds(decorationIds: string[]) { this.#decorationIds = decorationIds; }
+
+    get rangeContent() { return this.#rangeContent; }
+    set rangeContent(rangeContent: string) { this.#rangeContent = rangeContent; }
 }
 
 export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQuerySource => {

@@ -2,12 +2,12 @@ import React, { useMemo } from 'react';
 import { Card, Input, Select, Button, Table, InputNumber, Switch } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { IDataQueryParam } from '../models/IDataQueryParam';
-import type { IDataQueryArgument } from '../models/IDataQueryArgument';
+import { DataQueryArgumentVM } from '../models/IDataQueryArgument';
 import { GenericDataTypes } from '../constants';
 
 interface DataQueryArgumentPanelProps {
-  _arguments: IDataQueryArgument[];
-  setArguments: (_arguments: IDataQueryArgument[]) => void;
+  _arguments: DataQueryArgumentVM[];
+  setArguments: (_arguments: DataQueryArgumentVM[]) => void;
 }
 
 // Available data types for selection
@@ -23,7 +23,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
   _arguments,
   setArguments
 }) => {
-  const params = useMemo(() => _arguments.map(a => a.param), [_arguments]);
+  const params = useMemo(() => _arguments.map(a => a.parameter), [_arguments]);
 
   const handleAddParam = () => {
     const newKey = (_arguments.length + 1).toString();
@@ -33,45 +33,39 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataType: GenericDataTypes.Text
     };
 
-    const newArgument: IDataQueryArgument = {
-      param: newParam,
-      value: undefined
-    };
+    const newArgument = new DataQueryArgumentVM(newParam);
     const newArguments = [..._arguments, newArgument];
     setArguments(newArguments);
   };
 
   const handleDeleteParam = (id: string) => {
-    const index = _arguments.findIndex(p => p.param.id === id);
-    if (index !== -1) {
-      const newArguments = _arguments.filter((_, i) => i !== index);
+    const argument = _arguments.find(p => p.parameter.id === id);
+    if (argument) {
+      const newArguments = _arguments.filter(p => p !== argument);
       setArguments(newArguments);
     }
   };
 
   const handleParamChange = (id: string, field: keyof IDataQueryParam, value: any) => {
-    const index = params.findIndex(p => p.id === id);
+    const index = _arguments.findIndex(p => p.parameter.id === id);
     if (index !== -1) {
       const newArguments = [..._arguments];
-      newArguments[index] = {
-        ...newArguments[index],
-        param: { ...newArguments[index].param, [field]: value }
-      };
+      newArguments[index].parameter = { ...newArguments[index].parameter, [field]: value };
       setArguments(newArguments);
     }
   };
 
   const handleArgumentChange = (id: string, value: any) => {
-    const index = _arguments.findIndex(p => p.param.id === id);
+    const index = _arguments.findIndex(p => p.parameter.id === id);
     if (index !== -1) {
       const newArguments = [..._arguments];
-      newArguments[index] = { ...newArguments[index], value };
+      newArguments[index].value = value;
       setArguments(newArguments);
     }
   };
 
   const renderValueInput = (param: IDataQueryParam) => {
-    const argument = _arguments.find(p => p.param.id === param.id);
+    const argument = _arguments.find(p => p.parameter.id === param.id);
     if (!argument) return null;
 
     switch (param.dataType) {
