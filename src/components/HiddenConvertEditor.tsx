@@ -1,11 +1,11 @@
 import { Editor } from "@monaco-editor/react";
-import { useRef } from "react";
+import { forwardRef, useImperativeHandle, useRef } from "react";
 import { editor as MonacoEditor, type IRange } from 'monaco-editor';
+import type { RawQuerySourceVM } from "../models/IRawQuerySource";
 import './HiddenConvertEditor.scss';
-import type { IRawQuerySourceVM } from "../models/IRawQuerySource";
 
 export interface IHiddenConvertCommand {
-  sourceDecorations: { source: IRawQuerySourceVM, decoration: MonacoEditor.IModelDecoration }[];
+  sourceDecorations: { source: RawQuerySourceVM, decoration: MonacoEditor.IModelDecoration }[];
   query: string;
 }
 
@@ -14,20 +14,20 @@ export interface IHiddenConvertResult {
   sourceRangeMap: { [key: string]: IRange };
 }
 
-export interface IHiddenConvertEditorProps {
-  parentRef: {
-    hiddenConvert: (command: IHiddenConvertCommand) => Promise<IHiddenConvertResult>;
-  };
+export interface IHiddenConvertEditorRef {
+  hiddenConvert: (command: IHiddenConvertCommand) => Promise<IHiddenConvertResult>;
 }
 
-const HiddenConvertEditor: React.FC<IHiddenConvertEditorProps> = ({ parentRef }) => {
+export interface IHiddenConvertEditorProps { }
+
+const HiddenConvertEditor = forwardRef<IHiddenConvertEditorRef, IHiddenConvertEditorProps>((_, ref) => {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor>(null);
 
   const handleEditorDidMount = (editor: MonacoEditor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
   }
 
-  parentRef.hiddenConvert = async (command: IHiddenConvertCommand): Promise<IHiddenConvertResult> => {
+  const hiddenConvert = async (command: IHiddenConvertCommand): Promise<IHiddenConvertResult> => {
     const { sourceDecorations, query } = command;
     const editor = editorRef.current!;
     const model = editor.getModel()!;
@@ -71,6 +71,10 @@ const HiddenConvertEditor: React.FC<IHiddenConvertEditorProps> = ({ parentRef })
     };
   };
 
+  useImperativeHandle(ref, () => ({
+    hiddenConvert
+  }));
+
   return (
     <Editor
       loading=""
@@ -82,6 +86,6 @@ const HiddenConvertEditor: React.FC<IHiddenConvertEditorProps> = ({ parentRef })
       onMount={handleEditorDidMount}
     />
   )
-}
+});
 
 export default HiddenConvertEditor;

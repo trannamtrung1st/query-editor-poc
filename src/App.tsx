@@ -13,7 +13,7 @@ import DataQueryArgumentPanel from './components/DataQueryArgumentPanel';
 import { DataQueryArgumentVM } from './models/IDataQueryArgument';
 import { Button, notification } from 'antd';
 import JsonModelModal from './components/JsonModelModal';
-import HiddenConvertEditor, { type IHiddenConvertCommand, type IHiddenConvertResult } from './components/HiddenConvertEditor';
+import HiddenConvertEditor, { type IHiddenConvertEditorRef } from './components/HiddenConvertEditor';
 import type { IDataQuery } from './models/IDataQuery';
 import { DataQueryParamVM } from './models/IDataQueryParam';
 import type { IExecuteDataQueryRequest } from './models/IExecuteDataQueryRequest';
@@ -28,6 +28,7 @@ function App() {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor>(null);
   const monaco = useMonaco()!;
   const querySourcesRef = useRef<QuerySourceRef>({});
+  const hiddenEditorRef = useRef<IHiddenConvertEditorRef>(null);
   const [noti, contextHolder] = notification.useNotification();
 
   const [queryResults, setQueryResults] = useState<IExecuteDataQueryResponse | null>(null);
@@ -75,11 +76,9 @@ function App() {
   }
 
   const componentRef = useRef<{
-    hiddenConvert: (command: IHiddenConvertCommand) => Promise<IHiddenConvertResult>;
     _removeAffectedSources: typeof _removeAffectedSources;
     removeAffectedSources: typeof _removeAffectedSources;
   }>({
-    hiddenConvert: async () => ({ query: '', sourceRangeMap: {} }),
     _removeAffectedSources,
     removeAffectedSources: debounce((ev) => componentRef.current._removeAffectedSources(ev), 100)
   });
@@ -380,6 +379,9 @@ function App() {
   }
 
   const getConvertedQuery = async () => {
+    const hiddenEditor = hiddenEditorRef.current;
+    if (!hiddenEditor) throw new Error('Hidden editor not mounted');
+
     const model = editorRef.current!.getModel()!;
     const sources = Object.values(querySourcesRef.current);
     const decorations = model.getAllDecorations();
@@ -389,7 +391,7 @@ function App() {
       source, decoration: decorationsMap[source.decorationIds[0]]
     }));
 
-    const { query, sourceRangeMap } = await componentRef.current.hiddenConvert({
+    const { query, sourceRangeMap } = await hiddenEditor.hiddenConvert({
       sourceDecorations,
       query: model.getValue()
     });
@@ -633,7 +635,7 @@ function App() {
         querySource={selectedQuerySource}
       />
 
-      <HiddenConvertEditor parentRef={componentRef.current} />
+      <HiddenConvertEditor ref={hiddenEditorRef} />
 
       {/* JSON Model Modal */}
       <JsonModelModal
