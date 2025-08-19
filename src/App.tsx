@@ -52,7 +52,7 @@ function App() {
       ));
 
       const affectedSources = decorations
-        .filter(d => d.options?.className === APP_MAIN_DECORATION)
+        .filter(d => d.options?.inlineClassName?.startsWith(APP_MAIN_DECORATION))
         .map(d => {
           const querySource = d.options?.after?.attachedData as RawQuerySourceVM;
           const range = model.getDecorationRange(querySource.decorationIds[0])!;
@@ -117,7 +117,7 @@ function App() {
       if (!hasAppClass) return;
 
       const decoration = model.getDecorationsInRange(e.target.range)
-        ?.find(d => d.options?.className === APP_MAIN_DECORATION);
+        ?.find(d => d.options?.inlineClassName?.startsWith(APP_MAIN_DECORATION));
 
       const attachedData = decoration?.options?.after?.attachedData as RawQuerySourceVM;
       if (!attachedData) return;
@@ -165,8 +165,7 @@ function App() {
       {
         range: insertedRange,
         options: {
-          className: APP_MAIN_DECORATION,
-          inlineClassName: `${APP_DECORATION_PREFIX}asset-table-tag`,
+          inlineClassName: `${APP_MAIN_DECORATION} ${APP_DECORATION_PREFIX}asset-table-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
             value: `**Table:** ${tableName}\n\n**Columns:**\n- id (int)\n- name (text)\n- description (text)`
@@ -231,8 +230,7 @@ function App() {
       {
         range: insertedRange,
         options: {
-          className: APP_MAIN_DECORATION,
-          inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-tag`,
+          inlineClassName: `${APP_MAIN_DECORATION} ${APP_DECORATION_PREFIX}asset-timeseries-tag`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           hoverMessage: {
             value:
@@ -331,8 +329,7 @@ function App() {
       {
         range: insertedRange,
         options: {
-          className: APP_MAIN_DECORATION,
-          inlineClassName: `${APP_DECORATION_PREFIX}asset-timeseries-container`,
+          inlineClassName: `${APP_MAIN_DECORATION} ${APP_DECORATION_PREFIX}asset-timeseries-container`,
           stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           after: {
             attachedData: querySource,
