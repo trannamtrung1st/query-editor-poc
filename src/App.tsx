@@ -567,7 +567,6 @@ function App() {
             theme="vs-dark"
             options={{
               minimap: { enabled: true },
-              fontSize: 14,
               lineNumbers: 'on',
               roundedSelection: false,
               scrollBeyondLastLine: false,
