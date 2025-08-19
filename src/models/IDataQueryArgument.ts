@@ -1,4 +1,4 @@
-import type { IDataQueryParam } from "./IDataQueryParam";
+import { DataQueryParamVM } from "./IDataQueryParam";
 
 export interface IDataQueryArgument {
     parameterName: string;
@@ -6,19 +6,19 @@ export interface IDataQueryArgument {
 }
 
 export class DataQueryArgumentVM implements IDataQueryArgument {
-    #parameter: IDataQueryParam;
+    #parameter: DataQueryParamVM;
 
     parameterName: string;
     value: any;
 
-    constructor(parameter: IDataQueryParam) {
+    constructor(parameter: DataQueryParamVM) {
         this.#parameter = parameter;
         this.parameterName = parameter.name;
     }
 
     get parameter() { return this.#parameter; }
 
-    set parameter(parameter: IDataQueryParam) {
+    set parameter(parameter: DataQueryParamVM) {
         this.#parameter = parameter;
         this.parameterName = parameter.name;
     }

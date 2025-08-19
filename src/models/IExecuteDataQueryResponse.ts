@@ -1,11 +1,7 @@
-export interface IColumn {
-  name: string;
-  underlyingDataType: string;
-  genericDataType: string;
-}
+import type { IDataColumn } from "./IDataColumn";
 
 export interface IExecuteDataQueryResponse {
-  columns: IColumn[];
+  columns: IDataColumn[];
   records: any[][];
 }
 

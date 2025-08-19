@@ -21,14 +21,14 @@ const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
     'voltage', 'current', 'power', 'frequency', 'status',
     'timestamp', 'quality', 'unit', 'description', 'location'
   ];
-  const selectedAttributeName = querySource?.sourceConfig?.attributeName;
+  const selectedTarget = querySource?.sourceConfig?.target;
 
   useEffect(() => {
     if (visible && querySource) {
       // Initialize form with current values
       form.setFieldsValue({
         assetName: querySource.sourceId,
-        attributeName: selectedAttributeName
+        attributeName: selectedTarget
       });
     }
   }, [visible, querySource, form]);
@@ -58,7 +58,7 @@ const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
           <Input readOnly placeholder="Enter asset name" />
         </Form.Item>
 
-        {selectedAttributeName ? (
+        {selectedTarget ? (
           <Form.Item
             name="attributeName"
             label="Attribute Name"

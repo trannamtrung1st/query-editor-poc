@@ -51,7 +51,7 @@ export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQ
     }
 }
 
-export const newTimeseriesQuerySource = (markup: string, assetId: string, attributeName?: string): IRawQuerySource => {
+export const newTimeseriesQuerySource = (markup: string, assetId: string, target?: string): IRawQuerySource => {
     return {
         markup,
         type: QuerySource.TIMESERIES,
@@ -59,8 +59,8 @@ export const newTimeseriesQuerySource = (markup: string, assetId: string, attrib
         sourceIdUuid: assetId,
         sourceConfig: {
             assetId,
-            attributeName,
-            mode: attributeName ? TimeseriesMode.SINGLE : TimeseriesMode.MULTIPLE
+            target,
+            mode: target ? TimeseriesMode.SINGLE : TimeseriesMode.MULTIPLE
         }
     }
 }

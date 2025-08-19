@@ -15,6 +15,8 @@ import { Button, notification } from 'antd';
 import JsonModelModal from './components/JsonModelModal';
 import HiddenConvertEditor, { type IHiddenConvertCommand, type IHiddenConvertResult } from './components/HiddenConvertEditor';
 import type { IDataQuery } from './models/IDataQuery';
+import { DataQueryParamVM } from './models/IDataQueryParam';
+import type { IExecuteDataQueryRequest } from './models/IExecuteDataQueryRequest';
 
 const { TrackedRangeStickiness } = MonacoEditor;
 
@@ -267,11 +269,11 @@ function App() {
 
     const assetId = source?.sourceId ?? DEFAULT_UUID;
     const assetName = assetId === DEFAULT_UUID ? 'asset_1' : 'asset_2';
-    const attributeName = source?.sourceConfig?.attributeName ?? DEFAULT_ATTRIBUTE_NAMES[2];
+    const target = source?.sourceConfig?.target ?? DEFAULT_ATTRIBUTE_NAMES[2];
     const markup = source?.markup ?? uniqueId('markup_');
     const SQL_ASSET_NAME = `"${assetName}"`;
-    const SQL_ATTRIBUTE_NAME = `"${attributeName}"`;
-    const INSERT_TEXT = SQL_ASSET_NAME + '.' + SQL_ATTRIBUTE_NAME;
+    const SQL_TARGET = `"${target}"`;
+    const INSERT_TEXT = SQL_ASSET_NAME + '.' + SQL_TARGET;
 
     // Execute the edit to insert the table name
     editor.executeEdits('insert-asset-attribute', [{
@@ -312,7 +314,7 @@ function App() {
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
     const querySource = new RawQuerySourceVM(
-      source ?? newTimeseriesQuerySource(markup, assetId, attributeName),
+      source ?? newTimeseriesQuerySource(markup, assetId, target),
       decorationIds,
       INSERT_TEXT
     );
@@ -321,7 +323,7 @@ function App() {
     const hoverMessage = {
       value:
         `**Asset:** ${assetName}`
-        + `\n\n**Attribute**: ${attributeName}`
+        + `\n\n**Attribute**: ${target}`
         + '\n\n**Parent**: Level 1 / Level 2'
     };
 
@@ -371,7 +373,7 @@ function App() {
     }
 
     editor.focus();
-    // console.log('Asset timeseries inserted and highlighted:', assetName, attributeName, decorations);
+    // console.log('Asset timeseries inserted and highlighted:', assetName, target, decorations);
 
     // Store decoration reference for potential removal later
     return decorations;
@@ -414,7 +416,9 @@ function App() {
     editor.removeDecorations(oldDecorations.map(d => d.id));
     model.setValue(query);
 
-    setQueryArguments(parameters.map(param => new DataQueryArgumentVM(param)));
+    setQueryArguments(parameters.map(param => new DataQueryArgumentVM(
+      new DataQueryParamVM(param)
+    )));
 
     const trackingDecorations = editor.createDecorationsCollection(sources.map(source => ({ range: source.range!, options: {} })));
     const decorationIds: string[] = (trackingDecorations as any)._decorationIds;
@@ -464,9 +468,8 @@ function App() {
 
       const { query, sources } = await getConvertedQuery();
       const parameters = queryArguments.map(arg => arg.parameter);
-      const requestBody: any = {
-        query, sources, parameters,
-        arguments: queryArguments
+      const requestBody: IExecuteDataQueryRequest = {
+        query, sources, parameters, arguments: queryArguments
       };
 
       const response = await fetch('http://localhost:5053/dqry/queries/execute', {

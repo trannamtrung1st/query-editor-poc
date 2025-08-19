@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Card, Input, Select, Button, Table, InputNumber, Switch } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import type { IDataQueryParam } from '../models/IDataQueryParam';
+import { DataQueryParamVM } from '../models/IDataQueryParam';
 import { DataQueryArgumentVM } from '../models/IDataQueryArgument';
 import { GenericDataTypes } from '../constants';
 
@@ -26,37 +26,31 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
   const params = useMemo(() => _arguments.map(a => a.parameter), [_arguments]);
 
   const handleAddParam = () => {
-    const newKey = (_arguments.length + 1).toString();
-    const newParam: IDataQueryParam = {
-      id: newKey,
-      name: '',
-      dataType: GenericDataTypes.Text
-    };
-
+    const newParam = new DataQueryParamVM({ name: '', dataType: GenericDataTypes.Text });
     const newArgument = new DataQueryArgumentVM(newParam);
     const newArguments = [..._arguments, newArgument];
     setArguments(newArguments);
   };
 
-  const handleDeleteParam = (id: string) => {
-    const argument = _arguments.find(p => p.parameter.id === id);
+  const handleDeleteParam = (key: string) => {
+    const argument = _arguments.find(p => p.parameter.key === key);
     if (argument) {
       const newArguments = _arguments.filter(p => p !== argument);
       setArguments(newArguments);
     }
   };
 
-  const handleParamChange = (id: string, field: keyof IDataQueryParam, value: any) => {
-    const index = _arguments.findIndex(p => p.parameter.id === id);
+  const handleParamChange = (key: string, field: keyof DataQueryParamVM, value: any) => {
+    const index = _arguments.findIndex(p => p.parameter.key === key);
     if (index !== -1) {
       const newArguments = [..._arguments];
-      newArguments[index].parameter = { ...newArguments[index].parameter, [field]: value };
+      newArguments[index].parameter = new DataQueryParamVM({ ...newArguments[index].parameter, [field]: value });
       setArguments(newArguments);
     }
   };
 
-  const handleArgumentChange = (id: string, value: any) => {
-    const index = _arguments.findIndex(p => p.parameter.id === id);
+  const handleArgumentChange = (key: string, value: any) => {
+    const index = _arguments.findIndex(p => p.parameter.key === key);
     if (index !== -1) {
       const newArguments = [..._arguments];
       newArguments[index].value = value;
@@ -64,8 +58,8 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
     }
   };
 
-  const renderValueInput = (param: IDataQueryParam) => {
-    const argument = _arguments.find(p => p.parameter.id === param.id);
+  const renderValueInput = (param: DataQueryParamVM) => {
+    const argument = _arguments.find(p => p.parameter.key === param.key);
     if (!argument) return null;
 
     switch (param.dataType) {
@@ -73,7 +67,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Input
             value={argument.value}
-            onChange={(e) => handleArgumentChange(param.id, e.target.value)}
+            onChange={(e) => handleArgumentChange(param.key, e.target.value)}
             placeholder="Enter string value"
             size="small"
           />
@@ -82,7 +76,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <InputNumber
             value={argument.value}
-            onChange={(value) => handleArgumentChange(param.id, value)}
+            onChange={(value) => handleArgumentChange(param.key, value)}
             placeholder="Enter integer value"
             style={{ width: '100%' }}
             size="small"
@@ -92,7 +86,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <InputNumber
             value={argument.value}
-            onChange={(value) => handleArgumentChange(param.id, value)}
+            onChange={(value) => handleArgumentChange(param.key, value)}
             placeholder="Enter float value"
             step={0.01}
             style={{ width: '100%' }}
@@ -103,7 +97,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Switch
             checked={argument.value}
-            onChange={(checked) => handleArgumentChange(param.id, checked)}
+            onChange={(checked) => handleArgumentChange(param.key, checked)}
             size="small"
           />
         );
@@ -111,7 +105,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Input
             value={argument.value}
-            onChange={(e) => handleArgumentChange(param.id, e.target.value)}
+            onChange={(e) => handleArgumentChange(param.key, e.target.value)}
             placeholder="yyyy-MM-ddTHH:mm:ss.sssZ"
             size="small"
           />
@@ -120,7 +114,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         return (
           <Input
             value={argument.value}
-            onChange={(e) => handleArgumentChange(param.id, e.target.value)}
+            onChange={(e) => handleArgumentChange(param.key, e.target.value)}
             placeholder="Enter value"
             size="small"
           />
@@ -134,10 +128,10 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataIndex: 'name',
       key: 'name',
       width: 120,
-      render: (text: string, record: IDataQueryParam) => (
+      render: (text: string, record: DataQueryParamVM) => (
         <Input
           value={text}
-          onChange={(e) => handleParamChange(record.id, 'name', e.target.value)}
+          onChange={(e) => handleParamChange(record.key, 'name', e.target.value)}
           placeholder="Parameter name"
           size="small"
         />
@@ -148,11 +142,11 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataIndex: 'dataType',
       key: 'dataType',
       width: 100,
-      render: (text: string, record: IDataQueryParam) => (
+      render: (text: string, record: DataQueryParamVM) => (
         <Select
           value={text}
           onChange={(value) => {
-            handleParamChange(record.id, 'dataType', value);
+            handleParamChange(record.key, 'dataType', value);
           }}
           style={{ width: '100%' }}
           options={availableDataTypes}
@@ -165,19 +159,19 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
       dataIndex: 'value',
       key: 'value',
       width: 120,
-      render: (_: any, record: IDataQueryParam) => renderValueInput(record)
+      render: (_: any, record: DataQueryParamVM) => renderValueInput(record)
     },
     {
       title: 'Action',
       key: 'action',
       width: 60,
-      render: (_: any, record: IDataQueryParam) => (
+      render: (_: any, record: DataQueryParamVM) => (
         <Button
           type="text"
           danger
           icon={<DeleteOutlined />}
           size="small"
-          onClick={() => handleDeleteParam(record.id)}
+          onClick={() => handleDeleteParam(record.key)}
         />
       )
     }
@@ -206,7 +200,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
         columns={columns}
         pagination={false}
         size="small"
-        rowKey="id"
+        rowKey="key"
         scroll={{ x: 400, y: 300 }}
         style={{ overflow: 'auto' }}
       />
