@@ -6,7 +6,6 @@ export interface IRawQuerySource {
     range?: IRange; // [NOTE] only when submit create/update
     type: QuerySource;
     sourceId: string;
-    sourceIdUuid?: string;
     sourceConfig?: any;
 }
 
@@ -18,7 +17,6 @@ export class RawQuerySourceVM implements IRawQuerySource {
     range?: IRange;
     type: QuerySource;
     sourceId: string;
-    sourceIdUuid?: string;
     sourceConfig?: any;
 
     constructor(source: IRawQuerySource, decorationIds: string[], rangeContent: string) {
@@ -26,7 +24,6 @@ export class RawQuerySourceVM implements IRawQuerySource {
         this.range = source.range;
         this.type = source.type;
         this.sourceId = source.sourceId;
-        this.sourceIdUuid = source.sourceIdUuid;
         this.sourceConfig = source.sourceConfig;
         this.#decorationIds = decorationIds;
         this.#rangeContent = rangeContent;
@@ -44,7 +41,6 @@ export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQ
         markup,
         type: QuerySource.ASSET_TABLE,
         sourceId: tableId,
-        sourceIdUuid: tableId,
         sourceConfig: {
             tableId
         }
@@ -56,7 +52,6 @@ export const newTimeseriesQuerySource = (markup: string, assetId: string, target
         markup,
         type: QuerySource.TIMESERIES,
         sourceId: assetId,
-        sourceIdUuid: assetId,
         sourceConfig: {
             assetId,
             target,
