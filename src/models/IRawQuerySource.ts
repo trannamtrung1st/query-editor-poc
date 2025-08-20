@@ -3,8 +3,8 @@ import { QuerySource, TimeseriesMode } from "../constants";
 
 export interface IRawQuerySource {
     markup: string;
-    range?: IRange; // [NOTE] only when submit create/update
-    type: QuerySource;
+    markupRange?: IRange; // [NOTE] only when submit create/update
+    sourceType: QuerySource;
     sourceId: string;
     sourceConfig?: any;
 }
@@ -14,15 +14,15 @@ export class RawQuerySourceVM implements IRawQuerySource {
     #rangeContent: string;
 
     markup: string;
-    range?: IRange;
-    type: QuerySource;
+    markupRange?: IRange;
+    sourceType: QuerySource;
     sourceId: string;
     sourceConfig?: any;
 
     constructor(source: IRawQuerySource, decorationIds: string[], rangeContent: string) {
         this.markup = source.markup;
-        this.range = source.range;
-        this.type = source.type;
+        this.markupRange = source.markupRange;
+        this.sourceType = source.sourceType;
         this.sourceId = source.sourceId;
         this.sourceConfig = source.sourceConfig;
         this.#decorationIds = decorationIds;
@@ -39,7 +39,7 @@ export class RawQuerySourceVM implements IRawQuerySource {
 export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQuerySource => {
     return {
         markup,
-        type: QuerySource.ASSET_TABLE,
+        sourceType: QuerySource.ASSET_TABLE,
         sourceId: tableId,
         sourceConfig: {
             tableId
@@ -50,7 +50,7 @@ export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQ
 export const newTimeseriesQuerySource = (markup: string, assetId: string, target?: string): IRawQuerySource => {
     return {
         markup,
-        type: QuerySource.TIMESERIES,
+        sourceType: QuerySource.TIMESERIES,
         sourceId: assetId,
         sourceConfig: {
             assetId,

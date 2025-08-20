@@ -93,7 +93,7 @@ function App() {
     // console.log('Clicked on a clickable decoration:', querySource);
     setSelectedQuerySource(querySource);
 
-    switch (querySource.type) {
+    switch (querySource.sourceType) {
       case QuerySource.ASSET_TABLE:
         setIsTableModalVisible(true);
         break;
@@ -398,7 +398,7 @@ function App() {
 
     sources.forEach(source => {
       const range = sourceRangeMap[source.markup];
-      if (range) source.range = range;
+      if (range) source.markupRange = range;
     });
 
     return { query, sources };
@@ -422,7 +422,7 @@ function App() {
       new DataQueryParamVM(param)
     )));
 
-    const trackingDecorations = editor.createDecorationsCollection(sources.map(source => ({ range: source.range!, options: {} })));
+    const trackingDecorations = editor.createDecorationsCollection(sources.map(source => ({ range: source.markupRange!, options: {} })));
     const decorationIds: string[] = (trackingDecorations as any)._decorationIds;
     const sourceTrackingDecorationMap: { [key: string]: string } = {};
     sources.forEach((source, index) => {
@@ -434,7 +434,7 @@ function App() {
       const range = model.getDecorationRange(decorationId);
       if (!range) return;
 
-      switch (source.type) {
+      switch (source.sourceType) {
         case QuerySource.ASSET_TABLE:
           onInsertTable({ selection: range, source })();
           break;
