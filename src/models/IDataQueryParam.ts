@@ -12,12 +12,20 @@ export class DataQueryParamVM implements IDataQueryParam {
     dataType: string;
     defaultValue?: any;
 
-    constructor(param: IDataQueryParam) {
-        this.#key = uniqueId();
-        this.name = param.name;
-        this.dataType = param.dataType;
-        this.defaultValue = param.defaultValue;
+    constructor(key: string, name: string, dataType: string, defaultValue?: any) {
+        this.#key = key;
+        this.name = name;
+        this.dataType = dataType;
+        this.defaultValue = defaultValue;
     }
 
     get key() { return this.#key; }
+
+    clone() {
+        return new DataQueryParamVM(this.#key, this.name, this.dataType, this.defaultValue);
+    }
+
+    static new(name: string, dataType: string, defaultValue?: any) {
+        return new DataQueryParamVM(uniqueId(), name, dataType, defaultValue);
+    }
 }

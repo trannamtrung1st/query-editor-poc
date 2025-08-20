@@ -26,7 +26,7 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
   const params = useMemo(() => _arguments.map(a => a.parameter), [_arguments]);
 
   const handleAddParam = () => {
-    const newParam = new DataQueryParamVM({ name: '', dataType: GenericDataTypes.Text });
+    const newParam = DataQueryParamVM.new('', GenericDataTypes.Text);
     const newArgument = new DataQueryArgumentVM(newParam);
     const newArguments = [..._arguments, newArgument];
     setArguments(newArguments);
@@ -40,11 +40,13 @@ const DataQueryArgumentPanel: React.FC<DataQueryArgumentPanelProps> = ({
     }
   };
 
-  const handleParamChange = (key: string, field: keyof DataQueryParamVM, value: any) => {
+  const handleParamChange = (key: string, field: keyof Omit<DataQueryParamVM, 'key'>, value: any) => {
     const index = _arguments.findIndex(p => p.parameter.key === key);
     if (index !== -1) {
       const newArguments = [..._arguments];
-      newArguments[index].parameter = new DataQueryParamVM({ ...newArguments[index].parameter, [field]: value });
+      const newParam = newArguments[index].parameter.clone();
+      newParam[field] = value;
+      newArguments[index].parameter = newParam;
       setArguments(newArguments);
     }
   };

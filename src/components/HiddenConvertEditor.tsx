@@ -1,11 +1,11 @@
 import { Editor } from "@monaco-editor/react";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { editor as MonacoEditor, type IRange } from 'monaco-editor';
-import type { RawQuerySourceVM } from "../models/IRawQuerySource";
+import type { DataQuerySourceVM } from "../models/IDataQuerySourceDto";
 import './HiddenConvertEditor.scss';
 
 export interface IHiddenConvertCommand {
-  sourceDecorations: { source: RawQuerySourceVM, decoration: MonacoEditor.IModelDecoration }[];
+  sourceDecorations: { source: DataQuerySourceVM, decoration: MonacoEditor.IModelDecoration }[];
   query: string;
 }
 

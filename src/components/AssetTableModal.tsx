@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Table } from 'antd';
-import type { IRawQuerySource } from '../models/IRawQuerySource';
+import type { IDataQuerySourceDto } from '../models/IDataQuerySourceDto';
 
 interface TableColumn {
   name: string;
@@ -11,7 +11,7 @@ interface TableColumn {
 interface AssetTableModalProps {
   visible: boolean;
   onCancel: () => void;
-  querySource: IRawQuerySource | null;
+  querySource: IDataQuerySourceDto | null;
 }
 
 const AssetTableModal: React.FC<AssetTableModalProps> = ({

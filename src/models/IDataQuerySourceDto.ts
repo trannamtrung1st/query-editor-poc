@@ -1,7 +1,7 @@
 import type { IRange } from "monaco-editor";
 import { QuerySource, TimeseriesMode } from "../constants";
 
-export interface IRawQuerySource {
+export interface IDataQuerySourceDto {
     markup: string;
     markupRange?: IRange; // [NOTE] only when submit create/update
     sourceType: QuerySource;
@@ -9,7 +9,7 @@ export interface IRawQuerySource {
     sourceConfig?: any;
 }
 
-export class RawQuerySourceVM implements IRawQuerySource {
+export class DataQuerySourceVM implements IDataQuerySourceDto {
     #decorationIds: string[];
     #rangeContent: string;
 
@@ -19,7 +19,7 @@ export class RawQuerySourceVM implements IRawQuerySource {
     sourceId: string;
     sourceConfig?: any;
 
-    constructor(source: IRawQuerySource, decorationIds: string[], rangeContent: string) {
+    constructor(source: IDataQuerySourceDto, decorationIds: string[], rangeContent: string) {
         this.markup = source.markup;
         this.markupRange = source.markupRange;
         this.sourceType = source.sourceType;
@@ -36,7 +36,7 @@ export class RawQuerySourceVM implements IRawQuerySource {
     set rangeContent(rangeContent: string) { this.#rangeContent = rangeContent; }
 }
 
-export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQuerySource => {
+export const newAssetTableQuerySource = (markup: string, tableId: string): IDataQuerySourceDto => {
     return {
         markup,
         sourceType: QuerySource.ASSET_TABLE,
@@ -47,7 +47,7 @@ export const newAssetTableQuerySource = (markup: string, tableId: string): IRawQ
     }
 }
 
-export const newTimeseriesQuerySource = (markup: string, assetId: string, target?: string): IRawQuerySource => {
+export const newTimeseriesQuerySource = (markup: string, assetId: string, target?: string): IDataQuerySourceDto => {
     return {
         markup,
         sourceType: QuerySource.TIMESERIES,

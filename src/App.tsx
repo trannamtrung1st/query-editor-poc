@@ -4,7 +4,7 @@ import { editor as MonacoEditor, type IRange } from 'monaco-editor';
 import './App.css'
 import { APP_DECORATION_PREFIX, APP_MAIN_DECORATION, DEFAULT_ATTRIBUTE_NAMES, DEFAULT_UUID, QuerySource, TimeseriesMode } from './constants';
 import { debounce, uniqueId } from 'lodash';
-import { newAssetTableQuerySource, newTimeseriesQuerySource, type IRawQuerySource, RawQuerySourceVM } from "./models/IRawQuerySource";
+import { newAssetTableQuerySource, newTimeseriesQuerySource, type IDataQuerySourceDto, DataQuerySourceVM } from "./models/IDataQuerySourceDto";
 import type { IExecuteDataQueryResponse } from './models/IExecuteDataQueryResponse';
 import QueryResultTable from './components/QueryResultTable';
 import AssetAttributeModal from './components/AssetAttributeModal';
@@ -21,7 +21,7 @@ import type { IExecuteDataQueryRequest } from './models/IExecuteDataQueryRequest
 const { TrackedRangeStickiness } = MonacoEditor;
 
 type QuerySourceRef = {
-  [key: string]: RawQuerySourceVM;
+  [key: string]: DataQuerySourceVM;
 }
 
 function App() {
@@ -35,7 +35,7 @@ function App() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isAssetModalVisible, setIsAssetModalVisible] = useState(false);
   const [isTableModalVisible, setIsTableModalVisible] = useState(false);
-  const [selectedQuerySource, setSelectedQuerySource] = useState<RawQuerySourceVM | null>(null);
+  const [selectedQuerySource, setSelectedQuerySource] = useState<DataQuerySourceVM | null>(null);
   const [queryArguments, setQueryArguments] = useState<DataQueryArgumentVM[]>([]);
   const [isJsonModelModalVisible, setIsJsonModelModalVisible] = useState(false);
 
@@ -57,7 +57,7 @@ function App() {
       const affectedSources = decorations
         .filter(d => d.options?.inlineClassName?.startsWith(APP_MAIN_DECORATION))
         .map(d => {
-          const querySource = d.options?.after?.attachedData as RawQuerySourceVM;
+          const querySource = d.options?.after?.attachedData as DataQuerySourceVM;
           const range = model.getDecorationRange(querySource.decorationIds[0])!;
           const currentRangeContent = model.getValueInRange(range);
           return { querySource, currentRangeContent };
@@ -89,7 +89,7 @@ function App() {
     componentRef.current.removeAffectedSources(ev);
   }
 
-  const handleClickQuerySource = (querySource: RawQuerySourceVM) => {
+  const handleClickQuerySource = (querySource: DataQuerySourceVM) => {
     // console.log('Clicked on a clickable decoration:', querySource);
     setSelectedQuerySource(querySource);
 
@@ -120,14 +120,14 @@ function App() {
       const decoration = model.getDecorationsInRange(e.target.range)
         ?.find(d => d.options?.inlineClassName?.startsWith(APP_MAIN_DECORATION));
 
-      const attachedData = decoration?.options?.after?.attachedData as RawQuerySourceVM;
+      const attachedData = decoration?.options?.after?.attachedData as DataQuerySourceVM;
       if (!attachedData) return;
 
       handleClickQuerySource(attachedData);
     });
   }
 
-  const onInsertTable = (args: { selection: IRange | null, source?: IRawQuerySource, tableName?: string, tableId?: string }) => () => {
+  const onInsertTable = (args: { selection: IRange | null, source?: IDataQuerySourceDto, tableName?: string, tableId?: string }) => () => {
     let { selection, source, tableName, tableId } = args;
     const editor = editorRef.current!;
     selection ??= editor.getSelection();
@@ -155,7 +155,7 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource = new RawQuerySourceVM(
+    const querySource = new DataQuerySourceVM(
       source ?? newAssetTableQuerySource(markup, tableId),
       decorationIds,
       SQL_TABLE_NAME
@@ -192,7 +192,7 @@ function App() {
     return decorations;
   }
 
-  const onInsertAssetTimeseries = (args: { selection: IRange | null, source?: IRawQuerySource }) => () => {
+  const onInsertAssetTimeseries = (args: { selection: IRange | null, source?: IDataQuerySourceDto }) => () => {
     let { selection, source } = args;
     const editor = editorRef.current!;
     selection ??= editor.getSelection();
@@ -220,7 +220,7 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource = new RawQuerySourceVM(
+    const querySource = new DataQuerySourceVM(
       source ?? newTimeseriesQuerySource(markup, assetId),
       decorationIds,
       SQL_ASSET_NAME
@@ -260,7 +260,7 @@ function App() {
     return decorations;
   }
 
-  const onInsertSingleTimeseries = (args: { selection: IRange | null, source?: IRawQuerySource }) => () => {
+  const onInsertSingleTimeseries = (args: { selection: IRange | null, source?: IDataQuerySourceDto }) => () => {
     let { selection, source } = args;
     const editor = editorRef.current!;
     selection ??= editor.getSelection();
@@ -312,7 +312,7 @@ function App() {
 
     // [IMPORTANT] must reconstruct range after loading query from BE, so range is tracked automatically
     const decorationIds: string[] = [];
-    const querySource = new RawQuerySourceVM(
+    const querySource = new DataQuerySourceVM(
       source ?? newTimeseriesQuerySource(markup, assetId, target),
       decorationIds,
       INSERT_TEXT

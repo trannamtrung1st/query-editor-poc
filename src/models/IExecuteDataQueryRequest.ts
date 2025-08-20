@@ -1,10 +1,10 @@
 import type { IDataQueryArgument } from "./IDataQueryArgument";
 import type { IDataQueryParam } from "./IDataQueryParam";
-import type { IRawQuerySource } from "./IRawQuerySource";
+import type { IDataQuerySourceDto } from "./IDataQuerySourceDto";
 
 export interface IExecuteDataQueryRequest {
     query: string;
-    sources: IRawQuerySource[];
+    sources: IDataQuerySourceDto[];
     parameters: IDataQueryParam[];
     arguments: IDataQueryArgument[];
 }

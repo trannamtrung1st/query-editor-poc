@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Table } from 'antd';
-import type { IRawQuerySource } from '../models/IRawQuerySource';
+import type { IDataQuerySourceDto } from '../models/IDataQuerySourceDto';
 
 interface AssetAttributeModalProps {
   visible: boolean;
   onCancel: () => void;
-  querySource: IRawQuerySource | null;
+  querySource: IDataQuerySourceDto | null;
 }
 
 const AssetAttributeModal: React.FC<AssetAttributeModalProps> = ({
