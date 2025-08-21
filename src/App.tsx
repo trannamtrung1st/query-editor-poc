@@ -410,6 +410,8 @@ function App() {
 
   const handleJsonModelLoad = (queryModel: IDataQuery) => {
     const { query, sources, parameters } = queryModel;
+    setQueryArguments(parameters.map(param => new DataQueryArgumentVM(DataQueryParamVM.from(param))));
+
     const editor = editorRef.current!;
     const model = editor.getModel()!;
     console.log(sources);
@@ -417,10 +419,6 @@ function App() {
     const oldDecorations = model.getAllDecorations();
     editor.removeDecorations(oldDecorations.map(d => d.id));
     model.setValue(query);
-
-    setQueryArguments(parameters.map(param => new DataQueryArgumentVM(
-      new DataQueryParamVM(param)
-    )));
 
     const trackingDecorations = editor.createDecorationsCollection(sources.map(source => ({ range: source.markupRange!, options: {} })));
     const decorationIds: string[] = (trackingDecorations as any)._decorationIds;

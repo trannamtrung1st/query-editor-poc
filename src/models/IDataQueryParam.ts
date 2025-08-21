@@ -25,6 +25,10 @@ export class DataQueryParamVM implements IDataQueryParam {
         return new DataQueryParamVM(this.#key, this.name, this.dataType, this.defaultValue);
     }
 
+    static from(param: IDataQueryParam) {
+        return DataQueryParamVM.new(param.name, param.dataType, param.defaultValue);
+    }
+
     static new(name: string, dataType: string, defaultValue?: any) {
         return new DataQueryParamVM(uniqueId(), name, dataType, defaultValue);
     }
